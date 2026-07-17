@@ -1,0 +1,4 @@
+[project]
+name = "nocturne-inspector"
+version = "0.1.0"
+description = "Engineering Intelligence Engine for software projects."
