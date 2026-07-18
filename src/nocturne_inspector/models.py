@@ -2,11 +2,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from uuid import uuid4
+
+from nocturne_inspector import __version__
+
+REPORT_SCHEMA_VERSION = "0.1.0"
+INSPECTOR_VERSION = __version__
+
+_SEMANTIC_VERSION_PATTERN = re.compile(
+    r"^(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 
 type JsonValue = (
     str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
@@ -38,6 +52,12 @@ def _to_json_compatible(value: object) -> JsonValue:
         return value
 
     raise TypeError(f"Unsupported JSON value: {type(value).__name__}")
+
+
+def _validate_semantic_version(value: str, *, field_name: str) -> None:
+    """Validate a semantic version used by the exported report contract."""
+    if _SEMANTIC_VERSION_PATTERN.fullmatch(value) is None:
+        raise ValueError(f"{field_name} must be a valid semantic version.")
 
 
 class Severity(StrEnum):
@@ -391,8 +411,8 @@ class InspectionReport:
 
     project: ProjectMetadata
     inspector_results: tuple[InspectorResult, ...]
-    schema_version: str = "0.1"
-    inspector_version: str = "0.1.0"
+    schema_version: str = REPORT_SCHEMA_VERSION
+    inspector_version: str = INSPECTOR_VERSION
     run_id: str = field(default_factory=lambda: str(uuid4()))
     generated_at: str = field(default_factory=_utc_now_isoformat)
 
@@ -400,8 +420,18 @@ class InspectionReport:
         if not self.schema_version.strip():
             raise ValueError("schema_version cannot be empty.")
 
+        _validate_semantic_version(
+            self.schema_version,
+            field_name="schema_version",
+        )
+
         if not self.inspector_version.strip():
             raise ValueError("inspector_version cannot be empty.")
+
+        _validate_semantic_version(
+            self.inspector_version,
+            field_name="inspector_version",
+        )
 
         if not self.run_id.strip():
             raise ValueError("run_id cannot be empty.")

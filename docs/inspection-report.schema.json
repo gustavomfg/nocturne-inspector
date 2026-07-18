@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nocturne:inspection-report:0.1.0",
+  "title": "Nocturne Inspector Report",
+  "description": "Versioned output contract produced by Nocturne Inspector.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "project",
+    "inspector_results",
+    "schema_version",
+    "inspector_version",
+    "run_id",
+    "generated_at",
+    "summary",
+    "metrics"
+  ],
+  "properties": {
+    "project": { "$ref": "#/$defs/project" },
+    "inspector_results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/inspectorResult" }
+    },
+    "schema_version": { "const": "0.1.0" },
+    "inspector_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "run_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "metrics": { "$ref": "#/$defs/metrics" }
+  },
+  "$defs": {
+    "category": {
+      "enum": [
+        "architecture",
+        "security",
+        "performance",
+        "testing",
+        "documentation",
+        "accessibility",
+        "dependencies",
+        "release",
+        "developer_experience"
+      ]
+    },
+    "severity": {
+      "enum": ["info", "low", "medium", "high", "critical"]
+    },
+    "findingKind": {
+      "enum": [
+        "confirmed_issue",
+        "documentation_inconsistency",
+        "technical_debt",
+        "risk",
+        "improvement_opportunity",
+        "needs_investigation",
+        "positive_finding"
+      ]
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "root", "languages", "files_scanned"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "root": { "type": "string", "minLength": 1 },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "files_scanned": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sourceLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "line_start", "line_end", "symbol"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "line_start": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "line_end": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "symbol": { "type": ["string", "null"] }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "source", "excerpt"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/sourceLocation" },
+        "excerpt": { "type": ["string", "null"] }
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "level", "rationale"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "level": { "enum": ["low", "medium", "high"] },
+        "rationale": { "type": "string", "minLength": 1 }
+      }
+    },
+    "recommendation": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "rationale",
+        "effort",
+        "breaking_change_risk"
+      ],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "rationale": { "type": "string", "minLength": 1 },
+        "effort": { "type": ["string", "null"] },
+        "breaking_change_risk": { "type": "boolean" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id",
+        "title",
+        "description",
+        "category",
+        "kind",
+        "severity",
+        "confidence",
+        "evidence",
+        "impact",
+        "recommendation",
+        "identifier"
+      ],
+      "properties": {
+        "rule_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "category": { "$ref": "#/$defs/category" },
+        "kind": { "$ref": "#/$defs/findingKind" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "impact": { "type": "string", "minLength": 1 },
+        "recommendation": { "$ref": "#/$defs/recommendation" },
+        "identifier": {
+          "type": "string",
+          "pattern": "^finding:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "inspectorResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inspector",
+        "category",
+        "findings",
+        "duration_ms",
+        "files_examined",
+        "warnings"
+      ],
+      "properties": {
+        "inspector": { "type": "string", "minLength": 1 },
+        "category": { "$ref": "#/$defs/category" },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding" }
+        },
+        "duration_ms": { "type": "number", "minimum": 0 },
+        "files_examined": { "type": "integer", "minimum": 0 },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_findings",
+        "by_severity",
+        "by_category",
+        "by_kind"
+      ],
+      "properties": {
+        "total_findings": { "type": "integer", "minimum": 0 },
+        "by_severity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["info", "low", "medium", "high", "critical"],
+          "properties": {
+            "info": { "type": "integer", "minimum": 0 },
+            "low": { "type": "integer", "minimum": 0 },
+            "medium": { "type": "integer", "minimum": 0 },
+            "high": { "type": "integer", "minimum": 0 },
+            "critical": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "by_category": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "architecture",
+            "security",
+            "performance",
+            "testing",
+            "documentation",
+            "accessibility",
+            "dependencies",
+            "release",
+            "developer_experience"
+          ],
+          "properties": {
+            "architecture": { "type": "integer", "minimum": 0 },
+            "security": { "type": "integer", "minimum": 0 },
+            "performance": { "type": "integer", "minimum": 0 },
+            "testing": { "type": "integer", "minimum": 0 },
+            "documentation": { "type": "integer", "minimum": 0 },
+            "accessibility": { "type": "integer", "minimum": 0 },
+            "dependencies": { "type": "integer", "minimum": 0 },
+            "release": { "type": "integer", "minimum": 0 },
+            "developer_experience": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "by_kind": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "confirmed_issue",
+            "documentation_inconsistency",
+            "technical_debt",
+            "risk",
+            "improvement_opportunity",
+            "needs_investigation",
+            "positive_finding"
+          ],
+          "properties": {
+            "confirmed_issue": { "type": "integer", "minimum": 0 },
+            "documentation_inconsistency": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "technical_debt": { "type": "integer", "minimum": 0 },
+            "risk": { "type": "integer", "minimum": 0 },
+            "improvement_opportunity": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "needs_investigation": { "type": "integer", "minimum": 0 },
+            "positive_finding": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_duration_ms", "total_files_examined"],
+      "properties": {
+        "total_duration_ms": { "type": "number", "minimum": 0 },
+        "total_files_examined": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

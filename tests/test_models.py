@@ -360,6 +360,19 @@ class InspectionReportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             replace(baseline, inspector_version=" ")
 
+    def test_rejects_non_semantic_contract_versions(self) -> None:
+        baseline = InspectionReport(
+            project=ProjectMetadata(name="demo", root="/demo"),
+            inspector_results=(),
+            run_id="run-fixed",
+            generated_at=FIXED_TIMESTAMP,
+        )
+
+        for invalid_version in ("0.1", "v0.1.0", "01.0.0"):
+            with self.subTest(version=invalid_version):
+                with self.assertRaises(ValueError):
+                    replace(baseline, schema_version=invalid_version)
+
 
 if __name__ == "__main__":
     unittest.main()
