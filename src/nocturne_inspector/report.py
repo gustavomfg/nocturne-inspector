@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from nocturne_inspector.models import InspectionReport
@@ -34,29 +35,68 @@ def save_json_report(
     destination: Path,
     *,
     indent: int = 2,
+    overwrite: bool = False,
 ) -> Path:
     """
-    Save an inspection report using an atomic file replacement.
+    Save an inspection report to an explicit destination atomically.
 
-    The report is first written to a temporary sibling file. The destination
-    is replaced only after the complete JSON has been written successfully.
+    The destination parent must already exist. Existing files are preserved
+    unless overwrite is explicitly enabled, and symbolic-link destinations
+    are always rejected. Saving is independent from project inspection; this
+    function must only be called in response to an explicit output request.
     """
-    resolved_destination = destination.expanduser().resolve()
-    resolved_destination.parent.mkdir(parents=True, exist_ok=True)
+    expanded_destination = destination.expanduser()
+    resolved_destination = expanded_destination.resolve()
+    parent = resolved_destination.parent
 
-    temporary_destination = resolved_destination.with_name(
-        f".{resolved_destination.name}.tmp"
-    )
+    if not parent.exists():
+        raise FileNotFoundError(
+            f"Report destination directory does not exist: {parent}"
+        )
+
+    if not parent.is_dir():
+        raise NotADirectoryError(
+            f"Report destination parent is not a directory: {parent}"
+        )
+
+    if expanded_destination.is_symlink():
+        raise ValueError("Report destination cannot be a symbolic link.")
+
+    if resolved_destination.exists():
+        if resolved_destination.is_dir():
+            raise IsADirectoryError(
+                f"Report destination is a directory: {resolved_destination}"
+            )
+
+        if not overwrite:
+            raise FileExistsError(
+                f"Report destination already exists: {resolved_destination}"
+            )
 
     content = report_to_json(report, indent=indent)
+    temporary_destination: Path | None = None
 
     try:
-        temporary_destination.write_text(
-            content,
+        with NamedTemporaryFile(
+            mode="w",
             encoding="utf-8",
-        )
-        temporary_destination.replace(resolved_destination)
+            dir=parent,
+            prefix=f".{resolved_destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_file.write(content)
+            temporary_file.flush()
+            temporary_destination = Path(temporary_file.name)
+
+        if overwrite:
+            temporary_destination.replace(resolved_destination)
+        else:
+            resolved_destination.hardlink_to(temporary_destination)
+            temporary_destination.unlink()
+            temporary_destination = None
     finally:
-        temporary_destination.unlink(missing_ok=True)
+        if temporary_destination is not None:
+            temporary_destination.unlink(missing_ok=True)
 
     return resolved_destination

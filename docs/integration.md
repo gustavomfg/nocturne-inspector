@@ -58,6 +58,14 @@ The Codex should never reproduce deterministic analysis already provided by the 
 
 The Inspector and the Codex communicate through a versioned inspection report.
 
+Generating an inspection report and persisting it are separate operations.
+Analysis never creates or modifies files in the inspected workspace. A report
+is written only when the user explicitly supplies an output path. That path may
+be inside the inspected project when chosen consciously by the user, but its
+parent directory must already exist and an existing file is never overwritten
+without explicit permission. Symbolic-link destinations are rejected so report
+output cannot be redirected to an unexpected file.
+
 Example:
 
 Project
