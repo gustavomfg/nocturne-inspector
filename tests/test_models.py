@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from nocturne_inspector.models import (
     Confidence,
@@ -16,7 +17,6 @@ from nocturne_inspector.models import (
     Severity,
     SourceLocation,
 )
-
 
 FIXED_TIMESTAMP = "2026-07-18T12:00:00+00:00"
 
@@ -170,19 +170,14 @@ class FindingTests(unittest.TestCase):
             source=SourceLocation(path="docs/b.md"),
         )
         baseline = make_finding()
-        arguments = {
-            "rule_id": baseline.rule_id,
-            "title": baseline.title,
-            "description": baseline.description,
-            "category": baseline.category,
-            "kind": baseline.kind,
-            "severity": baseline.severity,
-            "confidence": baseline.confidence,
-            "impact": baseline.impact,
-        }
-
-        first = Finding(evidence=(second_evidence, first_evidence), **arguments)
-        second = Finding(evidence=(first_evidence, second_evidence), **arguments)
+        first = replace(
+            baseline,
+            evidence=(second_evidence, first_evidence),
+        )
+        second = replace(
+            baseline,
+            evidence=(first_evidence, second_evidence),
+        )
 
         self.assertEqual(first.evidence, second.evidence)
         self.assertEqual(first.identifier, second.identifier)

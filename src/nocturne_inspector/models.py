@@ -3,30 +3,41 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 from uuid import uuid4
+
+type JsonValue = (
+    str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
+)
 
 
 def _utc_now_isoformat() -> str:
     """Return the current UTC instant in an ISO 8601 representation."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def _to_json_compatible(value: Any) -> Any:
+def _to_json_compatible(value: object) -> JsonValue:
     """Recursively convert domain collections into JSON-compatible values."""
     if isinstance(value, dict):
-        return {
-            key: _to_json_compatible(item)
-            for key, item in value.items()
-        }
+        converted: dict[str, JsonValue] = {}
+
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError("JSON object keys must be strings.")
+
+            converted[key] = _to_json_compatible(item)
+
+        return converted
 
     if isinstance(value, (list, tuple)):
         return [_to_json_compatible(item) for item in value]
 
-    return value
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+
+    raise TypeError(f"Unsupported JSON value: {type(value).__name__}")
 
 
 class Severity(StrEnum):
@@ -176,9 +187,7 @@ class Confidence:
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.score <= 1.0:
-            raise ValueError(
-                "Confidence score must be between 0.0 and 1.0."
-            )
+            raise ValueError("Confidence score must be between 0.0 and 1.0.")
 
         if not self.rationale.strip():
             raise ValueError("Confidence rationale cannot be empty.")
@@ -195,9 +204,7 @@ class Confidence:
     def level_for_score(score: float) -> ConfidenceLevel:
         """Convert a normalized confidence score into a readable level."""
         if not 0.0 <= score <= 1.0:
-            raise ValueError(
-                "Confidence score must be between 0.0 and 1.0."
-            )
+            raise ValueError("Confidence score must be between 0.0 and 1.0.")
 
         if score >= 0.8:
             return ConfidenceLevel.HIGH
@@ -251,9 +258,7 @@ class Finding:
             raise ValueError("Finding impact cannot be empty.")
 
         if not self.evidence:
-            raise ValueError(
-                "A finding must contain at least one piece of evidence."
-            )
+            raise ValueError("A finding must contain at least one piece of evidence.")
 
         ordered_evidence = tuple(
             sorted(
@@ -325,8 +330,7 @@ class InspectorResult:
 
         if invalid_categories:
             raise ValueError(
-                "Every finding in an InspectorResult must use the "
-                "result category."
+                "Every finding in an InspectorResult must use the result category."
             )
 
         object.__setattr__(
@@ -378,9 +382,7 @@ class InspectionSummary:
             ("by_kind", self.by_kind),
         ):
             if any(value < 0 for value in collection.values()):
-                raise ValueError(
-                    f"{collection_name} cannot contain negative values."
-                )
+                raise ValueError(f"{collection_name} cannot contain negative values.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -430,44 +432,27 @@ class InspectionReport:
     def findings(self) -> tuple[Finding, ...]:
         """Return all findings produced by every inspector."""
         return tuple(
-            finding
-            for result in self.inspector_results
-            for finding in result.findings
+            finding for result in self.inspector_results for finding in result.findings
         )
 
     @property
     def total_duration_ms(self) -> float:
         """Return the combined execution time of every inspector."""
-        return sum(
-            result.duration_ms
-            for result in self.inspector_results
-        )
+        return sum(result.duration_ms for result in self.inspector_results)
 
     @property
     def total_files_examined(self) -> int:
         """Return the total number of inspector file examinations."""
-        return sum(
-            result.files_examined
-            for result in self.inspector_results
-        )
+        return sum(result.files_examined for result in self.inspector_results)
 
     @property
     def summary(self) -> InspectionSummary:
         """Build aggregated report counts."""
-        severity_counts = {
-            severity.value: 0
-            for severity in Severity
-        }
+        severity_counts = {severity.value: 0 for severity in Severity}
 
-        category_counts = {
-            category.value: 0
-            for category in FindingCategory
-        }
+        category_counts = {category.value: 0 for category in FindingCategory}
 
-        kind_counts = {
-            kind.value: 0
-            for kind in FindingKind
-        }
+        kind_counts = {kind.value: 0 for kind in FindingKind}
 
         for finding in self.findings:
             severity_counts[finding.severity.value] += 1
@@ -481,9 +466,12 @@ class InspectionReport:
             by_kind=kind_counts,
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, JsonValue]:
         """Convert the report to JSON-compatible primitive values."""
         data = _to_json_compatible(asdict(self))
+
+        if not isinstance(data, dict):
+            raise TypeError("Serialized inspection report must be a JSON object.")
 
         data["summary"] = asdict(self.summary)
         data["metrics"] = {

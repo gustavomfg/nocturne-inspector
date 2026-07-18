@@ -3,12 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
 
-from nocturne_inspector.models import InspectionReport
+from nocturne_inspector.models import InspectionReport, JsonValue
 
 
-def report_to_dict(report: InspectionReport) -> dict[str, Any]:
+def report_to_dict(report: InspectionReport) -> dict[str, JsonValue]:
     """Convert an inspection report into primitive values."""
     return report.to_dict()
 
