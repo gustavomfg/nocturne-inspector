@@ -12,10 +12,13 @@ class InspectorRegistry:
 
     def register(self, inspector: Inspector) -> None:
         """Register one inspector, rejecting empty or duplicate names."""
-        name = inspector.name.strip()
+        name = inspector.name
 
-        if not name:
+        if not name.strip():
             raise ValueError("Inspector name cannot be empty.")
+
+        if name != name.strip():
+            raise ValueError("Inspector name cannot contain surrounding whitespace.")
 
         if name in self._inspectors_by_name:
             raise ValueError(f"Inspector already registered: {name}")

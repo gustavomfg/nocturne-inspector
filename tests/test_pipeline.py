@@ -45,6 +45,31 @@ class FailingInspector(Inspector):
         raise RuntimeError("deterministic inspector failure")
 
 
+class InconsistentInspector(Inspector):
+    """Return controlled identity mismatches for pipeline validation tests."""
+
+    name = "inconsistent"
+    category = FindingCategory.TESTING
+
+    def __init__(
+        self,
+        *,
+        result_name: str,
+        result_category: FindingCategory,
+    ) -> None:
+        self._result_name = result_name
+        self._result_category = result_category
+
+    def inspect(self, project_root: Path) -> InspectorResult:
+        return InspectorResult(
+            inspector=self._result_name,
+            category=self._result_category,
+            findings=(),
+            duration_ms=0.0,
+            files_examined=0,
+        )
+
+
 def create_pipeline(registry: InspectorRegistry) -> InspectionPipeline:
     """Create a pipeline with controlled operational metadata."""
     return InspectionPipeline(
@@ -108,6 +133,32 @@ class InspectionPipelineTests(unittest.TestCase):
 
             with self.assertRaises(NotADirectoryError):
                 pipeline.run(project_file)
+
+    def test_rejects_result_name_that_differs_from_inspector(self) -> None:
+        with TemporaryDirectory() as directory:
+            registry = InspectorRegistry()
+            registry.register(
+                InconsistentInspector(
+                    result_name="another-name",
+                    result_category=FindingCategory.TESTING,
+                )
+            )
+
+            with self.assertRaisesRegex(ValueError, "returned result name"):
+                create_pipeline(registry).run(Path(directory))
+
+    def test_rejects_result_category_that_differs_from_inspector(self) -> None:
+        with TemporaryDirectory() as directory:
+            registry = InspectorRegistry()
+            registry.register(
+                InconsistentInspector(
+                    result_name="inconsistent",
+                    result_category=FindingCategory.DOCUMENTATION,
+                )
+            )
+
+            with self.assertRaisesRegex(ValueError, "returned category"):
+                create_pipeline(registry).run(Path(directory))
 
 
 if __name__ == "__main__":

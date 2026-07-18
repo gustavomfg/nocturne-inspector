@@ -51,6 +51,9 @@ class InspectorRegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             registry.register(StubInspector(" ", FindingCategory.TESTING))
 
+        with self.assertRaises(ValueError):
+            registry.register(StubInspector(" spaced ", FindingCategory.TESTING))
+
     def test_discovery_returns_an_immutable_snapshot(self) -> None:
         registry = InspectorRegistry()
         first = StubInspector("first", FindingCategory.TESTING)

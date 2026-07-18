@@ -42,7 +42,26 @@ class InspectionPipeline:
             raise NotADirectoryError(f"Project root is not a directory: {root}")
 
         inspectors = self._registry.inspectors()
-        results = tuple(inspector.inspect(root) for inspector in inspectors)
+        results = []
+
+        for inspector in inspectors:
+            result = inspector.inspect(root)
+
+            if result.inspector != inspector.name:
+                raise ValueError(
+                    f"Inspector {inspector.name!r} returned result name "
+                    f"{result.inspector!r}."
+                )
+
+            if result.category is not inspector.category:
+                raise ValueError(
+                    f"Inspector {inspector.name!r} returned category "
+                    f"{result.category.value!r}; expected "
+                    f"{inspector.category.value!r}."
+                )
+
+            results.append(result)
+
         project_name = root.name or root.anchor
 
         return InspectionReport(
@@ -51,7 +70,7 @@ class InspectionPipeline:
                 root=root.as_posix(),
                 files_scanned=0,
             ),
-            inspector_results=results,
+            inspector_results=tuple(results),
             run_id=self._run_id_factory(),
             generated_at=self._generated_at_factory(),
         )
