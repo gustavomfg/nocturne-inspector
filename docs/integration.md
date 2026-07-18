@@ -57,6 +57,8 @@ The Codex should never reproduce deterministic analysis already provided by the 
 ## Communication
 
 The Inspector and the Codex communicate through a versioned inspection report.
+The contract is documented in [report-schema.md](report-schema.md) and defined
+formally by [inspection-report.schema.json](inspection-report.schema.json).
 
 Generating an inspection report and persisting it are separate operations.
 Analysis never creates or modifies files in the inspected workspace. A report
