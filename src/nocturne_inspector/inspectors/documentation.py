@@ -24,7 +24,15 @@ class DocumentationInspector(Inspector):
     name = "documentation"
     category = FindingCategory.DOCUMENTATION
 
-    _readme_names = frozenset({"readme", "readme.md", "readme.rst", "readme.txt"})
+    _essential_files = (
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "LICENSE",
+        "README.md",
+        "SECURITY.md",
+    )
+    _docs_directory = "docs"
     _documentation_suffixes = frozenset({".md", ".mdx", ".rst", ".txt"})
 
     def __init__(self, *, clock: Callable[[], float] = perf_counter) -> None:
@@ -32,19 +40,20 @@ class DocumentationInspector(Inspector):
         self._clock = clock
 
     def inspect(self, project_root: Path) -> InspectorResult:
-        """Inspect root README presence and zero-byte documentation files."""
+        """Inspect essential paths and zero-byte documentation files."""
         root = project_root.expanduser().resolve(strict=True)
 
         if not root.is_dir():
             raise NotADirectoryError(f"Project root is not a directory: {root}")
 
         started_at = self._clock()
-        documentation_files = self._documentation_files(root)
-        findings: list[Finding] = []
+        findings, essential_files, docs_root = self._inspect_essential_paths(root)
+        documentation_files = self._documentation_files(
+            root,
+            essential_files=essential_files,
+            docs_root=docs_root,
+        )
         warnings: list[str] = []
-
-        if not self._has_root_readme(root):
-            findings.append(self._missing_readme_finding())
 
         for documentation_file in documentation_files:
             relative_path = documentation_file.relative_to(root).as_posix()
@@ -70,32 +79,75 @@ class DocumentationInspector(Inspector):
             warnings=tuple(warnings),
         )
 
-    def _has_root_readme(self, root: Path) -> bool:
-        for entry in sorted(
-            root.iterdir(),
-            key=lambda path: (path.name.casefold(), path.name),
-        ):
-            if entry.name.casefold() not in self._readme_names:
-                continue
+    def _inspect_essential_paths(
+        self,
+        root: Path,
+    ) -> tuple[list[Finding], tuple[Path, ...], Path | None]:
+        findings: list[Finding] = []
+        files: list[Path] = []
 
-            if not entry.is_symlink() and entry.is_file():
-                return True
+        for name in self._essential_files:
+            candidate = root / name
 
-        return False
+            if candidate.is_symlink():
+                findings.append(
+                    self._invalid_essential_path_finding(
+                        name,
+                        expected="regular file",
+                        observed="symbolic link",
+                    )
+                )
+            elif not candidate.exists():
+                findings.append(self._missing_essential_path_finding(name))
+            elif not candidate.is_file():
+                findings.append(
+                    self._invalid_essential_path_finding(
+                        name,
+                        expected="regular file",
+                        observed=self._path_kind(candidate),
+                    )
+                )
+            else:
+                files.append(candidate)
 
-    def _documentation_files(self, root: Path) -> tuple[Path, ...]:
-        files: set[Path] = set()
+        docs_root = root / self._docs_directory
 
-        for entry in root.iterdir():
-            if entry.name.casefold() not in self._readme_names:
-                continue
+        if docs_root.is_symlink():
+            findings.append(
+                self._invalid_essential_path_finding(
+                    self._docs_directory,
+                    expected="directory",
+                    observed="symbolic link",
+                )
+            )
+            valid_docs_root: Path | None = None
+        elif not docs_root.exists():
+            findings.append(self._missing_essential_path_finding(self._docs_directory))
+            valid_docs_root = None
+        elif not docs_root.is_dir():
+            findings.append(
+                self._invalid_essential_path_finding(
+                    self._docs_directory,
+                    expected="directory",
+                    observed=self._path_kind(docs_root),
+                )
+            )
+            valid_docs_root = None
+        else:
+            valid_docs_root = docs_root
 
-            if not entry.is_symlink() and entry.is_file():
-                files.add(entry)
+        return findings, tuple(files), valid_docs_root
 
-        docs_root = root / "docs"
+    def _documentation_files(
+        self,
+        root: Path,
+        *,
+        essential_files: tuple[Path, ...],
+        docs_root: Path | None,
+    ) -> tuple[Path, ...]:
+        files = set(essential_files)
 
-        if not docs_root.is_symlink() and docs_root.is_dir():
+        if docs_root is not None:
             for directory, directory_names, file_names in docs_root.walk():
                 directory_names[:] = sorted(
                     name
@@ -114,31 +166,77 @@ class DocumentationInspector(Inspector):
 
         return tuple(sorted(files, key=lambda path: path.relative_to(root).as_posix()))
 
-    def _missing_readme_finding(self) -> Finding:
-        checked_names = ", ".join(sorted(self._readme_names))
+    @staticmethod
+    def _path_kind(path: Path) -> str:
+        if path.is_dir():
+            return "directory"
+
+        if path.is_file():
+            return "regular file"
+
+        return "unsupported filesystem entry"
+
+    def _missing_essential_path_finding(self, relative_path: str) -> Finding:
         return Finding(
-            rule_id="documentation.missing-root-readme",
-            title="Root README not found",
-            description="No recognized README file exists at the project root.",
+            rule_id="documentation.missing-essential-path",
+            title="Essential documentation path not found",
+            description=(
+                f"The expected documentation path {relative_path!r} is absent."
+            ),
             category=self.category,
-            kind=FindingKind.IMPROVEMENT_OPPORTUNITY,
+            kind=FindingKind.CONFIRMED_ISSUE,
             severity=Severity.LOW,
             confidence=Confidence.from_score(
                 1.0,
-                "The project root was checked against a fixed README name set.",
+                "The expected root path was checked directly without heuristics.",
             ),
             evidence=(
                 Evidence(
-                    description=f"No root file matched: {checked_names}.",
-                    source=SourceLocation(path="."),
+                    description="The expected path does not exist at the project root.",
+                    source=SourceLocation(path=relative_path),
                 ),
             ),
-            impact="The project has no conventional root documentation entry point.",
+            impact="An expected project documentation entry is unavailable.",
             recommendation=Recommendation(
-                summary="Add a root README with essential project information.",
+                summary=f"Add the expected documentation path {relative_path!r}.",
                 rationale=(
-                    "A conventional entry point makes project documentation "
-                    "directly discoverable."
+                    "The project documentation contract lists this path as an "
+                    "essential entry."
+                ),
+            ),
+        )
+
+    def _invalid_essential_path_finding(
+        self,
+        relative_path: str,
+        *,
+        expected: str,
+        observed: str,
+    ) -> Finding:
+        return Finding(
+            rule_id="documentation.invalid-essential-path",
+            title="Essential documentation path has an invalid type",
+            description=(
+                f"The path {relative_path!r} is a {observed}; expected {expected}."
+            ),
+            category=self.category,
+            kind=FindingKind.CONFIRMED_ISSUE,
+            severity=Severity.LOW,
+            confidence=Confidence.from_score(
+                1.0,
+                "The path type was read directly from the filesystem.",
+            ),
+            evidence=(
+                Evidence(
+                    description=f"Observed {observed}; expected {expected}.",
+                    source=SourceLocation(path=relative_path),
+                ),
+            ),
+            impact="The expected documentation entry cannot be inspected as required.",
+            recommendation=Recommendation(
+                summary=f"Provide {relative_path!r} as a {expected}.",
+                rationale=(
+                    "The documented project contract requires the expected path type."
                 ),
             ),
         )
