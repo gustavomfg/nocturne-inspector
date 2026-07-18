@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+
+def _utc_now_isoformat() -> str:
+    """Return the current UTC instant in an ISO 8601 representation."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 class Severity(StrEnum):
@@ -204,6 +211,7 @@ class Confidence:
 class Finding:
     """Evidence-based conclusion produced by an inspector."""
 
+    rule_id: str
     title: str
     description: str
     category: FindingCategory
@@ -213,11 +221,11 @@ class Finding:
     evidence: tuple[Evidence, ...]
     impact: str
     recommendation: Recommendation | None = None
-    identifier: str = field(default_factory=lambda: str(uuid4()))
+    identifier: str = field(init=False)
 
     def __post_init__(self) -> None:
-        if not self.identifier.strip():
-            raise ValueError("Finding identifier cannot be empty.")
+        if not self.rule_id.strip():
+            raise ValueError("Finding rule_id cannot be empty.")
 
         if not self.title.strip():
             raise ValueError("Finding title cannot be empty.")
@@ -232,6 +240,46 @@ class Finding:
             raise ValueError(
                 "A finding must contain at least one piece of evidence."
             )
+
+        ordered_evidence = tuple(
+            sorted(
+                self.evidence,
+                key=lambda item: (
+                    item.source.path,
+                    item.source.line_start or 0,
+                    item.source.line_end or 0,
+                    item.source.symbol or "",
+                    item.description,
+                    item.excerpt or "",
+                ),
+            )
+        )
+        object.__setattr__(self, "evidence", ordered_evidence)
+        object.__setattr__(self, "identifier", self._stable_identifier())
+
+    def _stable_identifier(self) -> str:
+        """Build an identifier from the rule, category, and evidence locations."""
+        identity = {
+            "category": self.category.value,
+            "locations": [
+                {
+                    "line_end": item.source.line_end,
+                    "line_start": item.source.line_start,
+                    "path": item.source.path,
+                    "symbol": item.source.symbol,
+                }
+                for item in self.evidence
+            ],
+            "rule_id": self.rule_id,
+        }
+        canonical_identity = json.dumps(
+            identity,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        digest = hashlib.sha256(canonical_identity.encode("utf-8")).hexdigest()
+        return f"finding:{digest}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,6 +315,13 @@ class InspectorResult:
                 "result category."
             )
 
+        object.__setattr__(
+            self,
+            "findings",
+            tuple(sorted(self.findings, key=lambda finding: finding.identifier)),
+        )
+        object.__setattr__(self, "warnings", tuple(sorted(self.warnings)))
+
 
 @dataclass(frozen=True, slots=True)
 class ProjectMetadata:
@@ -286,6 +341,8 @@ class ProjectMetadata:
 
         if self.files_scanned < 0:
             raise ValueError("files_scanned cannot be negative.")
+
+        object.__setattr__(self, "languages", tuple(sorted(set(self.languages))))
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,9 +377,8 @@ class InspectionReport:
     inspector_results: tuple[InspectorResult, ...]
     schema_version: str = "0.1"
     inspector_version: str = "0.1.0"
-    generated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    run_id: str = field(default_factory=lambda: str(uuid4()))
+    generated_at: str = field(default_factory=_utc_now_isoformat)
 
     def __post_init__(self) -> None:
         if not self.schema_version.strip():
@@ -331,8 +387,30 @@ class InspectionReport:
         if not self.inspector_version.strip():
             raise ValueError("inspector_version cannot be empty.")
 
+        if not self.run_id.strip():
+            raise ValueError("run_id cannot be empty.")
+
         if not self.generated_at.strip():
             raise ValueError("generated_at cannot be empty.")
+
+        try:
+            generated_at = datetime.fromisoformat(self.generated_at)
+        except ValueError as error:
+            raise ValueError("generated_at must be a valid ISO 8601 value.") from error
+
+        if generated_at.tzinfo is None:
+            raise ValueError("generated_at must include timezone information.")
+
+        object.__setattr__(
+            self,
+            "inspector_results",
+            tuple(
+                sorted(
+                    self.inspector_results,
+                    key=lambda result: (result.category.value, result.inspector),
+                )
+            ),
+        )
 
     @property
     def findings(self) -> tuple[Finding, ...]:
