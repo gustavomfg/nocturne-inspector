@@ -1,5 +1,9 @@
 # v0.1
 
+Current foundation milestone. The Documentation Inspector was moved into this
+milestone by the current implementation sequence. No other specialist is
+included in the foundation scope.
+
 Core
 
 Filesystem
@@ -10,13 +14,11 @@ Models
 
 JSON Report
 
+Documentation Inspector
+
 # v0.2
 
 Architecture Inspector
-
-# v0.3
-
-Documentation Inspector
 
 # v0.4
 
