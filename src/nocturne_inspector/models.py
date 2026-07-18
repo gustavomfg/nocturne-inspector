@@ -1,0 +1,402 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+
+class Severity(StrEnum):
+    """Impact level assigned to a finding."""
+
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class ConfidenceLevel(StrEnum):
+    """Human-readable representation of evidence confidence."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class FindingCategory(StrEnum):
+    """Engineering domain responsible for a finding."""
+
+    ARCHITECTURE = "architecture"
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+    TESTING = "testing"
+    DOCUMENTATION = "documentation"
+    ACCESSIBILITY = "accessibility"
+    DEPENDENCIES = "dependencies"
+    RELEASE = "release"
+    DEVELOPER_EXPERIENCE = "developer_experience"
+
+
+class FindingKind(StrEnum):
+    """Nature of a finding produced by an inspector."""
+
+    CONFIRMED_ISSUE = "confirmed_issue"
+    DOCUMENTATION_INCONSISTENCY = "documentation_inconsistency"
+    TECHNICAL_DEBT = "technical_debt"
+    RISK = "risk"
+    IMPROVEMENT_OPPORTUNITY = "improvement_opportunity"
+    NEEDS_INVESTIGATION = "needs_investigation"
+    POSITIVE_FINDING = "positive_finding"
+
+
+@dataclass(frozen=True, slots=True)
+class SourceLocation:
+    """Location from which a piece of evidence was collected."""
+
+    path: str
+    line_start: int | None = None
+    line_end: int | None = None
+    symbol: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.path.strip():
+            raise ValueError("Source path cannot be empty.")
+
+        if self.line_start is not None and self.line_start < 1:
+            raise ValueError("line_start must be greater than zero.")
+
+        if self.line_end is not None and self.line_end < 1:
+            raise ValueError("line_end must be greater than zero.")
+
+        if (
+            self.line_start is not None
+            and self.line_end is not None
+            and self.line_end < self.line_start
+        ):
+            raise ValueError("line_end cannot be lower than line_start.")
+
+    @classmethod
+    def from_path(
+        cls,
+        path: Path,
+        *,
+        project_root: Path | None = None,
+        line_start: int | None = None,
+        line_end: int | None = None,
+        symbol: str | None = None,
+    ) -> SourceLocation:
+        """
+        Create a source location from a filesystem path.
+
+        When project_root is provided, the stored path is relative to the
+        project whenever possible. This avoids leaking unnecessary absolute
+        paths into exported reports.
+        """
+        resolved_path = path.expanduser().resolve()
+
+        if project_root is not None:
+            resolved_root = project_root.expanduser().resolve()
+
+            try:
+                normalized_path = resolved_path.relative_to(resolved_root)
+            except ValueError:
+                normalized_path = resolved_path
+        else:
+            normalized_path = resolved_path
+
+        return cls(
+            path=normalized_path.as_posix(),
+            line_start=line_start,
+            line_end=line_end,
+            symbol=symbol,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    """Concrete information supporting a finding."""
+
+    description: str
+    source: SourceLocation
+    excerpt: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.description.strip():
+            raise ValueError("Evidence description cannot be empty.")
+
+
+@dataclass(frozen=True, slots=True)
+class Recommendation:
+    """Suggested response to a finding."""
+
+    summary: str
+    rationale: str
+    effort: str | None = None
+    breaking_change_risk: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.summary.strip():
+            raise ValueError("Recommendation summary cannot be empty.")
+
+        if not self.rationale.strip():
+            raise ValueError("Recommendation rationale cannot be empty.")
+
+
+@dataclass(frozen=True, slots=True)
+class Confidence:
+    """Confidence assigned to a finding based on its available evidence."""
+
+    score: float
+    level: ConfidenceLevel
+    rationale: str
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.score <= 1.0:
+            raise ValueError(
+                "Confidence score must be between 0.0 and 1.0."
+            )
+
+        if not self.rationale.strip():
+            raise ValueError("Confidence rationale cannot be empty.")
+
+        expected_level = self.level_for_score(self.score)
+
+        if self.level is not expected_level:
+            raise ValueError(
+                "Confidence level does not match its numeric score. "
+                f"Expected {expected_level.value!r} for score {self.score}."
+            )
+
+    @staticmethod
+    def level_for_score(score: float) -> ConfidenceLevel:
+        """Convert a normalized confidence score into a readable level."""
+        if not 0.0 <= score <= 1.0:
+            raise ValueError(
+                "Confidence score must be between 0.0 and 1.0."
+            )
+
+        if score >= 0.8:
+            return ConfidenceLevel.HIGH
+
+        if score >= 0.5:
+            return ConfidenceLevel.MEDIUM
+
+        return ConfidenceLevel.LOW
+
+    @classmethod
+    def from_score(
+        cls,
+        score: float,
+        rationale: str,
+    ) -> Confidence:
+        """Create a confidence value and infer its level automatically."""
+        return cls(
+            score=score,
+            level=cls.level_for_score(score),
+            rationale=rationale,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Finding:
+    """Evidence-based conclusion produced by an inspector."""
+
+    title: str
+    description: str
+    category: FindingCategory
+    kind: FindingKind
+    severity: Severity
+    confidence: Confidence
+    evidence: tuple[Evidence, ...]
+    impact: str
+    recommendation: Recommendation | None = None
+    identifier: str = field(default_factory=lambda: str(uuid4()))
+
+    def __post_init__(self) -> None:
+        if not self.identifier.strip():
+            raise ValueError("Finding identifier cannot be empty.")
+
+        if not self.title.strip():
+            raise ValueError("Finding title cannot be empty.")
+
+        if not self.description.strip():
+            raise ValueError("Finding description cannot be empty.")
+
+        if not self.impact.strip():
+            raise ValueError("Finding impact cannot be empty.")
+
+        if not self.evidence:
+            raise ValueError(
+                "A finding must contain at least one piece of evidence."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class InspectorResult:
+    """Structured output produced by one specialist inspector."""
+
+    inspector: str
+    category: FindingCategory
+    findings: tuple[Finding, ...]
+    duration_ms: float
+    files_examined: int
+    warnings: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.inspector.strip():
+            raise ValueError("Inspector name cannot be empty.")
+
+        if self.duration_ms < 0:
+            raise ValueError("Inspector duration cannot be negative.")
+
+        if self.files_examined < 0:
+            raise ValueError("files_examined cannot be negative.")
+
+        invalid_categories = tuple(
+            finding.category
+            for finding in self.findings
+            if finding.category is not self.category
+        )
+
+        if invalid_categories:
+            raise ValueError(
+                "Every finding in an InspectorResult must use the "
+                "result category."
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectMetadata:
+    """Basic information about the inspected project."""
+
+    name: str
+    root: str
+    languages: tuple[str, ...] = ()
+    files_scanned: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("Project name cannot be empty.")
+
+        if not self.root.strip():
+            raise ValueError("Project root cannot be empty.")
+
+        if self.files_scanned < 0:
+            raise ValueError("files_scanned cannot be negative.")
+
+
+@dataclass(frozen=True, slots=True)
+class InspectionSummary:
+    """Aggregated metrics for an inspection report."""
+
+    total_findings: int
+    by_severity: dict[str, int]
+    by_category: dict[str, int]
+    by_kind: dict[str, int]
+
+    def __post_init__(self) -> None:
+        if self.total_findings < 0:
+            raise ValueError("total_findings cannot be negative.")
+
+        for collection_name, collection in (
+            ("by_severity", self.by_severity),
+            ("by_category", self.by_category),
+            ("by_kind", self.by_kind),
+        ):
+            if any(value < 0 for value in collection.values()):
+                raise ValueError(
+                    f"{collection_name} cannot contain negative values."
+                )
+
+
+@dataclass(frozen=True, slots=True)
+class InspectionReport:
+    """Complete, versioned report generated by Nocturne Inspector."""
+
+    project: ProjectMetadata
+    inspector_results: tuple[InspectorResult, ...]
+    schema_version: str = "0.1"
+    inspector_version: str = "0.1.0"
+    generated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+    def __post_init__(self) -> None:
+        if not self.schema_version.strip():
+            raise ValueError("schema_version cannot be empty.")
+
+        if not self.inspector_version.strip():
+            raise ValueError("inspector_version cannot be empty.")
+
+        if not self.generated_at.strip():
+            raise ValueError("generated_at cannot be empty.")
+
+    @property
+    def findings(self) -> tuple[Finding, ...]:
+        """Return all findings produced by every inspector."""
+        return tuple(
+            finding
+            for result in self.inspector_results
+            for finding in result.findings
+        )
+
+    @property
+    def total_duration_ms(self) -> float:
+        """Return the combined execution time of every inspector."""
+        return sum(
+            result.duration_ms
+            for result in self.inspector_results
+        )
+
+    @property
+    def total_files_examined(self) -> int:
+        """Return the total number of inspector file examinations."""
+        return sum(
+            result.files_examined
+            for result in self.inspector_results
+        )
+
+    @property
+    def summary(self) -> InspectionSummary:
+        """Build aggregated report counts."""
+        severity_counts = {
+            severity.value: 0
+            for severity in Severity
+        }
+
+        category_counts = {
+            category.value: 0
+            for category in FindingCategory
+        }
+
+        kind_counts = {
+            kind.value: 0
+            for kind in FindingKind
+        }
+
+        for finding in self.findings:
+            severity_counts[finding.severity.value] += 1
+            category_counts[finding.category.value] += 1
+            kind_counts[finding.kind.value] += 1
+
+        return InspectionSummary(
+            total_findings=len(self.findings),
+            by_severity=severity_counts,
+            by_category=category_counts,
+            by_kind=kind_counts,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the report to JSON-compatible primitive values."""
+        data = asdict(self)
+
+        data["summary"] = asdict(self.summary)
+        data["metrics"] = {
+            "total_duration_ms": self.total_duration_ms,
+            "total_files_examined": self.total_files_examined,
+        }
+
+        return data
