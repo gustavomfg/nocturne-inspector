@@ -15,6 +15,20 @@ def _utc_now_isoformat() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _to_json_compatible(value: Any) -> Any:
+    """Recursively convert domain collections into JSON-compatible values."""
+    if isinstance(value, dict):
+        return {
+            key: _to_json_compatible(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, (list, tuple)):
+        return [_to_json_compatible(item) for item in value]
+
+    return value
+
+
 class Severity(StrEnum):
     """Impact level assigned to a finding."""
 
@@ -469,7 +483,7 @@ class InspectionReport:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the report to JSON-compatible primitive values."""
-        data = asdict(self)
+        data = _to_json_compatible(asdict(self))
 
         data["summary"] = asdict(self.summary)
         data["metrics"] = {
