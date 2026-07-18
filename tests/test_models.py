@@ -11,6 +11,7 @@ from nocturne_inspector.models import (
     FindingCategory,
     FindingKind,
     InspectionReport,
+    InspectionSummary,
     InspectorResult,
     ProjectMetadata,
     Recommendation,
@@ -82,6 +83,19 @@ class SourceLocationTests(unittest.TestCase):
             SourceLocation(path=" ")
 
 
+class EvidenceAndRecommendationTests(unittest.TestCase):
+    def test_evidence_requires_description(self) -> None:
+        with self.assertRaises(ValueError):
+            Evidence(description=" ", source=SourceLocation(path="README.md"))
+
+    def test_recommendation_requires_summary_and_rationale(self) -> None:
+        with self.assertRaises(ValueError):
+            Recommendation(summary=" ", rationale="Measured rationale.")
+
+        with self.assertRaises(ValueError):
+            Recommendation(summary="Measured response.", rationale=" ")
+
+
 class ConfidenceTests(unittest.TestCase):
     def test_maps_boundary_scores_to_documented_levels(self) -> None:
         cases = (
@@ -130,17 +144,19 @@ class FindingTests(unittest.TestCase):
             )
 
         with self.assertRaises(ValueError):
-            Finding(
-                rule_id=finding.rule_id,
-                title=finding.title,
-                description=finding.description,
-                category=finding.category,
-                kind=finding.kind,
-                severity=finding.severity,
-                confidence=finding.confidence,
-                evidence=(),
-                impact=finding.impact,
-            )
+            replace(finding, evidence=())
+
+    def test_requires_descriptive_fields(self) -> None:
+        baseline = make_finding()
+
+        with self.assertRaises(ValueError):
+            replace(baseline, title=" ")
+
+        with self.assertRaises(ValueError):
+            replace(baseline, description=" ")
+
+        with self.assertRaises(ValueError):
+            replace(baseline, impact=" ")
 
     def test_identifier_is_stable_for_same_rule_category_and_location(self) -> None:
         first = make_finding(description="First wording.")
@@ -207,6 +223,51 @@ class InspectorResultTests(unittest.TestCase):
             tuple(sorted((first.identifier, second.identifier))),
         )
         self.assertEqual(result.warnings, ("a warning", "z warning"))
+
+    def test_rejects_invalid_result_metadata(self) -> None:
+        baseline = make_result()
+
+        with self.assertRaises(ValueError):
+            replace(baseline, inspector=" ")
+
+        with self.assertRaises(ValueError):
+            replace(baseline, duration_ms=-0.01)
+
+        with self.assertRaises(ValueError):
+            replace(baseline, files_examined=-1)
+
+
+class ProjectMetadataTests(unittest.TestCase):
+    def test_rejects_invalid_project_metadata(self) -> None:
+        baseline = ProjectMetadata(name="demo", root="/demo")
+
+        with self.assertRaises(ValueError):
+            replace(baseline, name=" ")
+
+        with self.assertRaises(ValueError):
+            replace(baseline, root=" ")
+
+        with self.assertRaises(ValueError):
+            replace(baseline, files_scanned=-1)
+
+
+class InspectionSummaryTests(unittest.TestCase):
+    def test_rejects_negative_aggregates(self) -> None:
+        with self.assertRaises(ValueError):
+            InspectionSummary(
+                total_findings=-1,
+                by_severity={},
+                by_category={},
+                by_kind={},
+            )
+
+        with self.assertRaises(ValueError):
+            InspectionSummary(
+                total_findings=0,
+                by_severity={"low": -1},
+                by_category={},
+                by_kind={},
+            )
 
 
 class InspectionReportTests(unittest.TestCase):
@@ -284,6 +345,20 @@ class InspectionReportTests(unittest.TestCase):
                         run_id="run-fixed",
                         generated_at=generated_at,
                     )
+
+    def test_rejects_empty_contract_versions(self) -> None:
+        baseline = InspectionReport(
+            project=ProjectMetadata(name="demo", root="/demo"),
+            inspector_results=(),
+            run_id="run-fixed",
+            generated_at=FIXED_TIMESTAMP,
+        )
+
+        with self.assertRaises(ValueError):
+            replace(baseline, schema_version=" ")
+
+        with self.assertRaises(ValueError):
+            replace(baseline, inspector_version=" ")
 
 
 if __name__ == "__main__":
