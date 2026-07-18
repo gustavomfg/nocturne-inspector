@@ -58,9 +58,7 @@ class DocumentationInspector(Inspector):
                 continue
 
             if size == 0:
-                findings.append(
-                    self._empty_documentation_finding(relative_path)
-                )
+                findings.append(self._empty_documentation_finding(relative_path))
 
         duration_ms = (self._clock() - started_at) * 1_000
         return InspectorResult(
@@ -114,9 +112,7 @@ class DocumentationInspector(Inspector):
                     if candidate.suffix.casefold() in self._documentation_suffixes:
                         files.add(candidate)
 
-        return tuple(
-            sorted(files, key=lambda path: path.relative_to(root).as_posix())
-        )
+        return tuple(sorted(files, key=lambda path: path.relative_to(root).as_posix()))
 
     def _missing_readme_finding(self) -> Finding:
         checked_names = ", ".join(sorted(self._readme_names))

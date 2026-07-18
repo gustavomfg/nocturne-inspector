@@ -66,12 +66,12 @@ class DocumentationInspectorTests(unittest.TestCase):
             (root / "docs" / "z.md").touch()
             (root / "docs" / "a.rst").touch()
 
-            first = DocumentationInspector(
-                clock=ControlledClock(1.0, 1.0)
-            ).inspect(root)
-            second = DocumentationInspector(
-                clock=ControlledClock(2.0, 2.0)
-            ).inspect(root)
+            first = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
+                root
+            )
+            second = DocumentationInspector(clock=ControlledClock(2.0, 2.0)).inspect(
+                root
+            )
 
             first_semantics = tuple(
                 (finding.identifier, finding.rule_id, finding.evidence[0].source.path)
