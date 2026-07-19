@@ -18,3 +18,5 @@ Decisões, arquitetura e informações aprendidas pelo agente.
 {"type":"suggestion-decision","title":"Distinguir categoria sem findings de categoria não avaliada","status":"applied","recordedAt":"2026-07-19T15:23:37.867Z"}
 {"type":"suggestion-decision","title":"Rejeitar métricas não finitas antes da serialização","status":"accepted","recordedAt":"2026-07-19T15:25:13.588Z"}
 {"type":"suggestion-decision","title":"Rejeitar métricas não finitas antes da serialização","status":"applied","recordedAt":"2026-07-19T15:26:20.728Z"}
+{"type":"suggestion-decision","title":"Declarar explicitamente o backend de construção","status":"accepted","recordedAt":"2026-07-19T15:26:56.182Z"}
+{"type":"suggestion-decision","title":"Declarar explicitamente o backend de construção","status":"applied","recordedAt":"2026-07-19T15:30:01.480Z"}
