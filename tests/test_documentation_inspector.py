@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from nocturne_inspector.inspectors.documentation import DocumentationInspector
+from nocturne_inspector.scanner import scan_project
 
 ESSENTIAL_FILES = (
     "AGENTS.md",
@@ -52,7 +53,7 @@ class DocumentationInspectorTests(unittest.TestCase):
             create_documented_project(root)
             inspector = DocumentationInspector(clock=ControlledClock(1.0, 1.25))
 
-            result = inspector.inspect(root)
+            result = inspector.inspect(scan_project(root))
 
             self.assertEqual(result.findings, ())
             self.assertEqual(result.files_examined, 7)
@@ -76,7 +77,7 @@ class DocumentationInspectorTests(unittest.TestCase):
 
                 result = DocumentationInspector(
                     clock=ControlledClock(1.0, 1.0)
-                ).inspect(root)
+                ).inspect(scan_project(root))
                 missing = tuple(
                     finding
                     for finding in result.findings
@@ -97,7 +98,7 @@ class DocumentationInspectorTests(unittest.TestCase):
             (root / "docs").write_text("not a directory\n", encoding="utf-8")
 
             result = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
-                root
+                scan_project(root)
             )
             invalid_paths = {
                 finding.evidence[0].source.path
@@ -116,10 +117,10 @@ class DocumentationInspectorTests(unittest.TestCase):
             (root / "docs" / "a.rst").touch()
 
             first = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
-                root
+                scan_project(root)
             )
             second = DocumentationInspector(clock=ControlledClock(2.0, 2.0)).inspect(
-                root
+                scan_project(root)
             )
 
             first_semantics = tuple(
@@ -143,7 +144,7 @@ class DocumentationInspectorTests(unittest.TestCase):
             (root / "README.md").write_text(" \n", encoding="utf-8")
 
             result = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
-                root
+                scan_project(root)
             )
 
             self.assertEqual(result.findings, ())
@@ -160,7 +161,7 @@ class DocumentationInspectorTests(unittest.TestCase):
             (root / "docs").symlink_to(external_docs, target_is_directory=True)
 
             result = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
-                root
+                scan_project(root)
             )
 
             invalid = tuple(
@@ -178,22 +179,11 @@ class DocumentationInspectorTests(unittest.TestCase):
             create_documented_project(root)
             before = workspace_snapshot(root)
 
-            DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(root)
+            DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
+                scan_project(root)
+            )
 
             self.assertEqual(workspace_snapshot(root), before)
-
-    def test_rejects_missing_or_non_directory_project_roots(self) -> None:
-        with TemporaryDirectory() as directory:
-            root = Path(directory)
-            project_file = root / "project.txt"
-            project_file.touch()
-            inspector = DocumentationInspector(clock=ControlledClock(1.0, 1.0))
-
-            with self.assertRaises(FileNotFoundError):
-                inspector.inspect(root / "missing")
-
-            with self.assertRaises(NotADirectoryError):
-                inspector.inspect(project_file)
 
 
 if __name__ == "__main__":

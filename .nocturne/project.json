@@ -1,0 +1,10 @@
+{
+  "name": "Nocturne-Inspector",
+  "stack": [
+    "Python"
+  ],
+  "primaryLanguage": "Python",
+  "commands": {
+    "test": "pytest"
+  }
+}

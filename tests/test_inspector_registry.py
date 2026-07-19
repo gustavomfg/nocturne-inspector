@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from nocturne_inspector.inspectors.base import Inspector
 from nocturne_inspector.inspectors.documentation import DocumentationInspector
@@ -9,7 +8,7 @@ from nocturne_inspector.inspectors.registry import (
     InspectorRegistry,
     create_default_registry,
 )
-from nocturne_inspector.models import FindingCategory, InspectorResult
+from nocturne_inspector.models import FindingCategory, InspectorResult, ProjectContext
 
 
 class StubInspector(Inspector):
@@ -19,7 +18,7 @@ class StubInspector(Inspector):
         self.name = name
         self.category = category
 
-    def inspect(self, project_root: Path) -> InspectorResult:
+    def inspect(self, context: ProjectContext) -> InspectorResult:
         return InspectorResult(
             inspector=self.name,
             category=self.category,

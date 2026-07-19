@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import cast
 
 from nocturne_inspector.inspectors.base import Inspector
-from nocturne_inspector.models import FindingCategory, InspectorResult
+from nocturne_inspector.models import FindingCategory, InspectorResult, ProjectContext
 
 
 class IncompleteInspector(Inspector):
@@ -22,10 +22,10 @@ class RecordingInspector(Inspector):
     category = FindingCategory.TESTING
 
     def __init__(self) -> None:
-        self.inspected_root: Path | None = None
+        self.context: ProjectContext | None = None
 
-    def inspect(self, project_root: Path) -> InspectorResult:
-        self.inspected_root = project_root
+    def inspect(self, context: ProjectContext) -> InspectorResult:
+        self.context = context
         return InspectorResult(
             inspector=self.name,
             category=self.category,
@@ -44,13 +44,14 @@ class InspectorContractTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             cast(type[RecordingInspector], IncompleteInspector)()
 
-    def test_concrete_inspector_receives_path_and_returns_result(self) -> None:
+    def test_concrete_inspector_receives_context_and_returns_result(self) -> None:
         root = Path("/deterministic/project")
+        context = ProjectContext(root=root, files=())
         inspector = RecordingInspector()
 
-        result = inspector.inspect(root)
+        result = inspector.inspect(context)
 
-        self.assertEqual(inspector.inspected_root, root)
+        self.assertIs(inspector.context, context)
         self.assertEqual(result.inspector, inspector.name)
         self.assertIs(result.category, inspector.category)
 

@@ -18,9 +18,12 @@ through an explicit documented version change.
 | `summary` | Counts derived from all findings. | Deterministic. |
 | `metrics` | Duration and file-examination totals. | Duration may vary. |
 
-`project.files_scanned` is `0` in v0.1 because the documented Filesystem
-Scanner does not exist yet. Specialist examinations are reported separately in
-`metrics.total_files_examined` and each result's `files_examined` field.
+`project.files_scanned` is the number of regular, non-symbolic-link files in the
+shared scanner inventory after documented directory exclusions are applied.
+`project.languages` contains the sorted languages identified by the scanner's
+explicit extension map. Specialist examinations are reported separately in
+`metrics.total_files_examined` and each result's `files_examined` field; the
+same inventory file may be examined by more than one specialist.
 
 ## Findings and evidence
 

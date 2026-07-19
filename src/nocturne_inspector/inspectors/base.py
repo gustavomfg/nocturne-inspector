@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from pathlib import Path
 
 from nocturne_inspector.models import (
     FindingCategory,
     InspectorResult,
+    ProjectContext,
 )
 
 
@@ -16,13 +16,13 @@ class Inspector(ABC):
     category: FindingCategory
 
     @abstractmethod
-    def inspect(self, project_root: Path) -> InspectorResult:
+    def inspect(self, context: ProjectContext) -> InspectorResult:
         """
         Inspect a project without modifying it.
 
         Args:
-            project_root:
-                Root directory of the project being inspected.
+            context:
+                Immutable project inventory shared by every inspector.
 
         Returns:
             Structured inspection result containing findings and metadata.

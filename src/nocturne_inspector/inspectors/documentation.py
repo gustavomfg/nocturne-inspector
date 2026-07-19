@@ -12,6 +12,7 @@ from nocturne_inspector.models import (
     FindingCategory,
     FindingKind,
     InspectorResult,
+    ProjectContext,
     Recommendation,
     Severity,
     SourceLocation,
@@ -39,17 +40,14 @@ class DocumentationInspector(Inspector):
         """Create an inspector with an optionally controlled monotonic clock."""
         self._clock = clock
 
-    def inspect(self, project_root: Path) -> InspectorResult:
+    def inspect(self, context: ProjectContext) -> InspectorResult:
         """Inspect essential paths and zero-byte documentation files."""
-        root = project_root.expanduser().resolve(strict=True)
-
-        if not root.is_dir():
-            raise NotADirectoryError(f"Project root is not a directory: {root}")
+        root = context.root
 
         started_at = self._clock()
         findings, essential_files, docs_root = self._inspect_essential_paths(root)
         documentation_files = self._documentation_files(
-            root,
+            context,
             essential_files=essential_files,
             docs_root=docs_root,
         )
@@ -140,7 +138,7 @@ class DocumentationInspector(Inspector):
 
     def _documentation_files(
         self,
-        root: Path,
+        context: ProjectContext,
         *,
         essential_files: tuple[Path, ...],
         docs_root: Path | None,
@@ -148,23 +146,19 @@ class DocumentationInspector(Inspector):
         files = set(essential_files)
 
         if docs_root is not None:
-            for directory, directory_names, file_names in docs_root.walk():
-                directory_names[:] = sorted(
-                    name
-                    for name in directory_names
-                    if not (directory / name).is_symlink()
-                )
+            files.update(
+                context.root / relative_path
+                for relative_path in context.files
+                if relative_path.parts[0] == self._docs_directory
+                and relative_path.suffix.casefold() in self._documentation_suffixes
+            )
 
-                for file_name in sorted(file_names):
-                    candidate = directory / file_name
-
-                    if candidate.is_symlink() or not candidate.is_file():
-                        continue
-
-                    if candidate.suffix.casefold() in self._documentation_suffixes:
-                        files.add(candidate)
-
-        return tuple(sorted(files, key=lambda path: path.relative_to(root).as_posix()))
+        return tuple(
+            sorted(
+                files,
+                key=lambda path: path.relative_to(context.root).as_posix(),
+            )
+        )
 
     @staticmethod
     def _path_kind(path: Path) -> str:

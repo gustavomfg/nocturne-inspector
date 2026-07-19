@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 
 from nocturne_inspector.inspectors.base import Inspector
 from nocturne_inspector.inspectors.registry import InspectorRegistry
-from nocturne_inspector.models import FindingCategory, InspectorResult
+from nocturne_inspector.models import FindingCategory, InspectorResult, ProjectContext
 from nocturne_inspector.pipeline import InspectionPipeline
 
 FIXED_TIMESTAMP = "2026-07-18T12:00:00+00:00"
@@ -21,10 +21,10 @@ class RecordingInspector(Inspector):
         self.name = name
         self._events = events
         self._files_examined = files_examined
-        self.received_root: Path | None = None
+        self.received_context: ProjectContext | None = None
 
-    def inspect(self, project_root: Path) -> InspectorResult:
-        self.received_root = project_root
+    def inspect(self, context: ProjectContext) -> InspectorResult:
+        self.received_context = context
         self._events.append(self.name)
         return InspectorResult(
             inspector=self.name,
@@ -41,7 +41,7 @@ class FailingInspector(Inspector):
     name = "failure"
     category = FindingCategory.TESTING
 
-    def inspect(self, project_root: Path) -> InspectorResult:
+    def inspect(self, context: ProjectContext) -> InspectorResult:
         raise RuntimeError("deterministic inspector failure")
 
 
@@ -60,7 +60,7 @@ class InconsistentInspector(Inspector):
         self._result_name = result_name
         self._result_category = result_category
 
-    def inspect(self, project_root: Path) -> InspectorResult:
+    def inspect(self, context: ProjectContext) -> InspectorResult:
         return InspectorResult(
             inspector=self._result_name,
             category=self._result_category,
@@ -93,18 +93,23 @@ class InspectionPipelineTests(unittest.TestCase):
             report = create_pipeline(registry).run(root)
 
             self.assertEqual(events, ["first", "second"])
-            self.assertEqual(first.received_root, root.resolve())
-            self.assertEqual(second.received_root, root.resolve())
+            context = first.received_context
+            self.assertIsNotNone(context)
+            assert context is not None
+            self.assertIs(context, second.received_context)
+            self.assertEqual(context.root, root.resolve())
             self.assertEqual(report.total_files_examined, 3)
 
     def test_builds_project_and_run_metadata(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "main.py").write_text("print('demo')\n", encoding="utf-8")
             report = create_pipeline(InspectorRegistry()).run(root)
 
             self.assertEqual(report.project.name, root.name)
             self.assertEqual(report.project.root, root.as_posix())
-            self.assertEqual(report.project.files_scanned, 0)
+            self.assertEqual(report.project.languages, ("Python",))
+            self.assertEqual(report.project.files_scanned, 1)
             self.assertEqual(report.run_id, "run-fixed")
             self.assertEqual(report.generated_at, FIXED_TIMESTAMP)
             self.assertEqual(report.inspector_results, ())

@@ -362,6 +362,47 @@ class InspectorResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectContext:
+    """Immutable filesystem context shared by every project inspector."""
+
+    root: Path
+    files: tuple[Path, ...]
+    languages: tuple[str, ...] = ()
+    excluded_directories: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.root.is_absolute():
+            raise ValueError("Project context root must be an absolute path.")
+
+        for path in self.files:
+            if path.is_absolute() or not path.parts or ".." in path.parts:
+                raise ValueError(
+                    "Project context files must be project-relative paths."
+                )
+
+        normalized_files = tuple(
+            sorted(set(self.files), key=lambda path: path.as_posix())
+        )
+        normalized_languages = tuple(sorted(set(self.languages)))
+        normalized_exclusions = tuple(sorted(set(self.excluded_directories)))
+
+        if any(
+            not name.strip() or Path(name).name != name
+            for name in normalized_exclusions
+        ):
+            raise ValueError("Exclusions must be non-empty directory names.")
+
+        object.__setattr__(self, "files", normalized_files)
+        object.__setattr__(self, "languages", normalized_languages)
+        object.__setattr__(self, "excluded_directories", normalized_exclusions)
+
+    @property
+    def files_scanned(self) -> int:
+        """Return the number of regular files in the deterministic inventory."""
+        return len(self.files)
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectMetadata:
     """Basic information about the inspected project."""
 
