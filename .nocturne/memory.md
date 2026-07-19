@@ -10,3 +10,4 @@ Decisões, arquitetura e informações aprendidas pelo agente.
 {"type":"suggestion-decision","title":"Separar ausência observada de obrigatoriedade documental","status":"accepted","recordedAt":"2026-07-19T14:40:32.162Z"}
 {"type":"suggestion-decision","title":"Conter falhas por especialista sem perder resultados válidos","status":"accepted","recordedAt":"2026-07-19T14:46:04.575Z"}
 {"type":"suggestion-decision","title":"Conter falhas por especialista sem perder resultados válidos","status":"applied","recordedAt":"2026-07-19T14:49:54.683Z"}
+{"type":"suggestion-decision","title":"Validar relatórios completos contra o JSON Schema","status":"accepted","recordedAt":"2026-07-19T14:50:24.080Z"}
