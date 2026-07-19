@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -344,6 +345,9 @@ class InspectorResult:
     def __post_init__(self) -> None:
         if not self.inspector.strip():
             raise ValueError("Inspector name cannot be empty.")
+
+        if not math.isfinite(self.duration_ms):
+            raise ValueError("Inspector duration must be finite.")
 
         if self.duration_ms < 0:
             raise ValueError("Inspector duration cannot be negative.")

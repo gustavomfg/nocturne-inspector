@@ -43,6 +43,18 @@ class ReportSerializationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             report_to_json(make_report(), indent=-1)
 
+    def test_rejects_non_finite_values_as_a_serialization_defense(self) -> None:
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with (
+                self.subTest(value=value),
+                patch(
+                    "nocturne_inspector.report.report_to_dict",
+                    return_value={"metric": value},
+                ),
+                self.assertRaises(ValueError),
+            ):
+                report_to_json(make_report())
+
 
 class ReportWritingTests(unittest.TestCase):
     def test_writes_complete_report_without_leaving_temporary_files(self) -> None:

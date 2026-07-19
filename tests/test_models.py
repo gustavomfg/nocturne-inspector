@@ -234,6 +234,10 @@ class InspectorResultTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             replace(baseline, duration_ms=-0.01)
 
+        for duration_ms in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(duration_ms=duration_ms), self.assertRaises(ValueError):
+                replace(baseline, duration_ms=duration_ms)
+
         with self.assertRaises(ValueError):
             replace(baseline, files_examined=-1)
 

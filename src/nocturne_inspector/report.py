@@ -23,6 +23,7 @@ def report_to_json(
 
     return json.dumps(
         report_to_dict(report),
+        allow_nan=False,
         ensure_ascii=False,
         indent=indent,
         sort_keys=False,
