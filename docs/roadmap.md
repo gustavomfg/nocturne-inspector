@@ -20,6 +20,11 @@ Documentation Inspector
 
 Architecture Inspector
 
+# v0.3
+
+Reserved for a future milestone. No scope is currently assigned; activating
+this version requires an explicit roadmap update before implementation begins.
+
 # v0.4
 
 Security Inspector

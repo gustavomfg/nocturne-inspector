@@ -20,3 +20,5 @@ Decisões, arquitetura e informações aprendidas pelo agente.
 {"type":"suggestion-decision","title":"Rejeitar métricas não finitas antes da serialização","status":"applied","recordedAt":"2026-07-19T15:26:20.728Z"}
 {"type":"suggestion-decision","title":"Declarar explicitamente o backend de construção","status":"accepted","recordedAt":"2026-07-19T15:26:56.182Z"}
 {"type":"suggestion-decision","title":"Declarar explicitamente o backend de construção","status":"applied","recordedAt":"2026-07-19T15:30:01.480Z"}
+{"type":"suggestion-decision","title":"Resolver a lacuna da versão 0.3 no roadmap","status":"accepted","recordedAt":"2026-07-19T15:30:18.401Z"}
+{"type":"suggestion-decision","title":"Resolver a lacuna da versão 0.3 no roadmap","status":"applied","recordedAt":"2026-07-19T15:31:08.149Z"}
