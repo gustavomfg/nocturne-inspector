@@ -2,7 +2,7 @@
 
 Nocturne Inspector exports one versioned JSON document. The canonical machine
 contract is [`inspection-report.schema.json`](inspection-report.schema.json).
-Schema version `0.2.0` belongs to the v0.1 foundation and may evolve only
+Schema version `0.3.0` belongs to the v0.1 foundation and may evolve only
 through an explicit documented version change.
 
 ## Top-level fields
@@ -24,6 +24,18 @@ shared scanner inventory after documented directory exclusions are applied.
 explicit extension map. Specialist examinations are reported separately in
 `metrics.total_files_examined` and each result's `files_examined` field; the
 same inventory file may be examined by more than one specialist.
+
+## Assessment coverage
+
+The summary distinguishes a zero finding count from an assessment that did not
+run. `assessed_categories` contains categories with at least one successful
+inspector result. `unassessed_categories` contains every other report category,
+including a category whose registered inspectors all failed. The two sorted
+collections are disjoint and together contain every category in the contract.
+
+`by_category` remains an exhaustive finding counter. A zero is evidence that no
+finding was emitted only when the same category appears in
+`assessed_categories`; otherwise the category was not successfully assessed.
 
 ## Inspector execution status
 
@@ -62,7 +74,8 @@ category, or location change does.
 - findings are ordered by stable identifier;
 - evidence is ordered by source location and description;
 - warnings and detected languages are sorted;
-- summary keys follow the enums declared by the schema.
+- summary keys and coverage categories follow the enums declared by the schema;
+- assessed and unassessed category lists are sorted.
 
 Operational metadata (`run_id`, `generated_at`, and durations) is intentionally
 excluded from semantic determinism.
@@ -74,9 +87,10 @@ breaking field changes require a schema version change and an update to both
 the JSON Schema and this document. The Inspector version does not replace the
 schema version: different Inspector releases may emit the same contract.
 
-Schema `0.2.0` adds the required `status` and `error` fields to every inspector
-result. Consumers of schema `0.1.0` must negotiate the new schema version before
-reading a `0.2.0` report.
+Schema `0.2.0` added the required `status` and `error` fields to every inspector
+result. Schema `0.3.0` adds required `assessed_categories` and
+`unassessed_categories` fields to the summary. Consumers of earlier schemas
+must negotiate version `0.3.0` before interpreting assessment coverage.
 
 Report serialization is independent from persistence. Analysis remains
 read-only; a file is written only when the user explicitly supplies an output

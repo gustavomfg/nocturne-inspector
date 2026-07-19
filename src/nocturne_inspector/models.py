@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from nocturne_inspector import __version__
 
-REPORT_SCHEMA_VERSION = "0.2.0"
+REPORT_SCHEMA_VERSION = "0.3.0"
 INSPECTOR_VERSION = __version__
 
 _SEMANTIC_VERSION_PATTERN = re.compile(
@@ -451,6 +451,8 @@ class InspectionSummary:
     by_severity: dict[str, int]
     by_category: dict[str, int]
     by_kind: dict[str, int]
+    assessed_categories: tuple[str, ...]
+    unassessed_categories: tuple[str, ...]
 
     def __post_init__(self) -> None:
         if self.total_findings < 0:
@@ -463,6 +465,21 @@ class InspectionSummary:
         ):
             if any(value < 0 for value in collection.values()):
                 raise ValueError(f"{collection_name} cannot contain negative values.")
+
+        known_categories = {category.value for category in FindingCategory}
+        assessed = set(self.assessed_categories)
+        unassessed = set(self.unassessed_categories)
+
+        if assessed & unassessed:
+            raise ValueError("Assessed and unassessed categories cannot overlap.")
+
+        if assessed | unassessed != known_categories:
+            raise ValueError(
+                "Assessed and unassessed categories must partition all categories."
+            )
+
+        object.__setattr__(self, "assessed_categories", tuple(sorted(assessed)))
+        object.__setattr__(self, "unassessed_categories", tuple(sorted(unassessed)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -549,11 +566,20 @@ class InspectionReport:
             category_counts[finding.category.value] += 1
             kind_counts[finding.kind.value] += 1
 
+        assessed_categories = {
+            result.category.value
+            for result in self.inspector_results
+            if result.status is InspectorStatus.SUCCESS
+        }
+        all_categories = {category.value for category in FindingCategory}
+
         return InspectionSummary(
             total_findings=len(self.findings),
             by_severity=severity_counts,
             by_category=category_counts,
             by_kind=kind_counts,
+            assessed_categories=tuple(assessed_categories),
+            unassessed_categories=tuple(all_categories - assessed_categories),
         )
 
     def to_dict(self) -> dict[str, JsonValue]:
@@ -563,7 +589,7 @@ class InspectionReport:
         if not isinstance(data, dict):
             raise TypeError("Serialized inspection report must be a JSON object.")
 
-        data["summary"] = asdict(self.summary)
+        data["summary"] = _to_json_compatible(asdict(self.summary))
         data["metrics"] = {
             "total_duration_ms": self.total_duration_ms,
             "total_files_examined": self.total_files_examined,

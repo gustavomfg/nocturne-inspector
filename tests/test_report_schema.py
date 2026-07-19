@@ -183,6 +183,21 @@ class ReportSchemaTests(unittest.TestCase):
 
         validator.validate(make_complete_report().to_dict())
 
+    def test_schema_distinguishes_assessed_and_unassessed_categories(self) -> None:
+        validator = create_validator()
+        report = make_complete_report().to_dict()
+        summary = report["summary"]
+        assert isinstance(summary, dict)
+
+        self.assertEqual(
+            summary["assessed_categories"],
+            ["documentation"],
+        )
+        unassessed_categories = summary["unassessed_categories"]
+        assert isinstance(unassessed_categories, list)
+        self.assertIn("testing", unassessed_categories)
+        validator.validate(report)
+
     def test_rejects_incompatible_nested_report_changes(self) -> None:
         validator = create_validator()
 

@@ -285,6 +285,10 @@ class InspectionSummaryTests(unittest.TestCase):
                 by_severity={},
                 by_category={},
                 by_kind={},
+                assessed_categories=(),
+                unassessed_categories=tuple(
+                    category.value for category in FindingCategory
+                ),
             )
 
         with self.assertRaises(ValueError):
@@ -293,6 +297,33 @@ class InspectionSummaryTests(unittest.TestCase):
                 by_severity={"low": -1},
                 by_category={},
                 by_kind={},
+                assessed_categories=(),
+                unassessed_categories=tuple(
+                    category.value for category in FindingCategory
+                ),
+            )
+
+    def test_requires_assessment_coverage_to_partition_categories(self) -> None:
+        categories = tuple(category.value for category in FindingCategory)
+
+        with self.assertRaisesRegex(ValueError, "cannot overlap"):
+            InspectionSummary(
+                total_findings=0,
+                by_severity={},
+                by_category={},
+                by_kind={},
+                assessed_categories=(FindingCategory.TESTING.value,),
+                unassessed_categories=categories,
+            )
+
+        with self.assertRaisesRegex(ValueError, "partition all categories"):
+            InspectionSummary(
+                total_findings=0,
+                by_severity={},
+                by_category={},
+                by_kind={},
+                assessed_categories=(),
+                unassessed_categories=(),
             )
 
 
@@ -319,8 +350,34 @@ class InspectionReportTests(unittest.TestCase):
             report.summary.by_category[FindingCategory.DOCUMENTATION.value],
             2,
         )
+        self.assertEqual(
+            report.summary.assessed_categories,
+            (FindingCategory.DOCUMENTATION.value,),
+        )
+        self.assertNotIn(
+            FindingCategory.DOCUMENTATION.value,
+            report.summary.unassessed_categories,
+        )
         self.assertEqual(report.total_duration_ms, 2.5)
         self.assertEqual(report.total_files_examined, 1)
+
+    def test_reports_complete_category_coverage(self) -> None:
+        results = tuple(
+            make_result(inspector=category.value, category=category)
+            for category in FindingCategory
+        )
+        report = InspectionReport(
+            project=ProjectMetadata(name="demo", root="/demo"),
+            inspector_results=results,
+            run_id="run-fixed",
+            generated_at=FIXED_TIMESTAMP,
+        )
+
+        self.assertEqual(
+            report.summary.assessed_categories,
+            tuple(sorted(category.value for category in FindingCategory)),
+        )
+        self.assertEqual(report.summary.unassessed_categories, ())
 
     def test_orders_inspector_results_deterministically(self) -> None:
         documentation = make_result(inspector="z-documentation")

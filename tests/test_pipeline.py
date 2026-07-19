@@ -128,6 +128,11 @@ class InspectionPipelineTests(unittest.TestCase):
             self.assertEqual(report.run_id, "run-fixed")
             self.assertEqual(report.generated_at, FIXED_TIMESTAMP)
             self.assertEqual(report.inspector_results, ())
+            self.assertEqual(report.summary.assessed_categories, ())
+            self.assertEqual(
+                report.summary.unassessed_categories,
+                tuple(sorted(category.value for category in FindingCategory)),
+            )
 
     def test_preserves_results_and_continues_after_operational_failure(self) -> None:
         with TemporaryDirectory() as directory:
@@ -156,6 +161,14 @@ class InspectionPipelineTests(unittest.TestCase):
             self.assertEqual(failure.findings, ())
             self.assertEqual(failure.files_examined, 0)
             self.assertEqual(report.total_files_examined, 3)
+            self.assertEqual(
+                report.summary.assessed_categories,
+                (FindingCategory.TESTING.value,),
+            )
+            self.assertNotIn(
+                FindingCategory.TESTING.value,
+                report.summary.unassessed_categories,
+            )
 
     def test_propagates_unexpected_failure_and_stops_later_inspectors(self) -> None:
         with TemporaryDirectory() as directory:

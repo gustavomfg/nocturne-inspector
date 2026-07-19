@@ -32,7 +32,7 @@ def _sanitized_inspector_error(error: OSError) -> str:
 
 
 class InspectionPipeline:
-    """Execute registered inspectors sequentially and assemble their report."""
+    """Execute inspectors and assemble a report with status-derived coverage."""
 
     def __init__(
         self,

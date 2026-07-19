@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:nocturne:inspection-report:0.2.0",
+  "$id": "urn:nocturne:inspection-report:0.3.0",
   "title": "Nocturne Inspector Report",
   "description": "Versioned output contract produced by Nocturne Inspector.",
   "type": "object",
@@ -21,7 +21,7 @@
       "type": "array",
       "items": { "$ref": "#/$defs/inspectorResult" }
     },
-    "schema_version": { "const": "0.2.0" },
+    "schema_version": { "const": "0.3.0" },
     "inspector_version": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
@@ -224,7 +224,9 @@
         "total_findings",
         "by_severity",
         "by_category",
-        "by_kind"
+        "by_kind",
+        "assessed_categories",
+        "unassessed_categories"
       ],
       "properties": {
         "total_findings": { "type": "integer", "minimum": 0 },
@@ -293,6 +295,16 @@
             "needs_investigation": { "type": "integer", "minimum": 0 },
             "positive_finding": { "type": "integer", "minimum": 0 }
           }
+        },
+        "assessed_categories": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/category" },
+          "uniqueItems": true
+        },
+        "unassessed_categories": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/category" },
+          "uniqueItems": true
         }
       }
     },

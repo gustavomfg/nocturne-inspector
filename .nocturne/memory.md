@@ -14,3 +14,5 @@ Decisões, arquitetura e informações aprendidas pelo agente.
 {"type":"suggestion-decision","title":"Completar metadados legais e histórico da versão inicial","status":"accepted","recordedAt":"2026-07-19T15:00:10.693Z"}
 {"type":"suggestion-decision","title":"Automatizar a matriz de validação em integração contínua","status":"accepted","recordedAt":"2026-07-19T15:10:06.046Z"}
 {"type":"suggestion-decision","title":"Completar metadados legais e histórico da versão inicial com licença MIT","status":"accepted","recordedAt":"2026-07-19T15:14:27.683Z"}
+{"type":"suggestion-decision","title":"Distinguir categoria sem findings de categoria não avaliada","status":"accepted","recordedAt":"2026-07-19T15:20:25.310Z"}
+{"type":"suggestion-decision","title":"Distinguir categoria sem findings de categoria não avaliada","status":"applied","recordedAt":"2026-07-19T15:23:37.867Z"}
