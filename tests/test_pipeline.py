@@ -6,7 +6,12 @@ from tempfile import TemporaryDirectory
 
 from nocturne_inspector.inspectors.base import Inspector
 from nocturne_inspector.inspectors.registry import InspectorRegistry
-from nocturne_inspector.models import FindingCategory, InspectorResult, ProjectContext
+from nocturne_inspector.models import (
+    FindingCategory,
+    InspectorResult,
+    InspectorStatus,
+    ProjectContext,
+)
 from nocturne_inspector.pipeline import InspectionPipeline
 
 FIXED_TIMESTAMP = "2026-07-18T12:00:00+00:00"
@@ -36,13 +41,23 @@ class RecordingInspector(Inspector):
 
 
 class FailingInspector(Inspector):
-    """Fail deterministically to verify pipeline error propagation."""
+    """Fail unexpectedly to verify pipeline error propagation."""
 
     name = "failure"
     category = FindingCategory.TESTING
 
     def inspect(self, context: ProjectContext) -> InspectorResult:
         raise RuntimeError("deterministic inspector failure")
+
+
+class OperationallyFailingInspector(Inspector):
+    """Fail with an expected operational error for isolation tests."""
+
+    name = "middle-failure"
+    category = FindingCategory.TESTING
+
+    def inspect(self, context: ProjectContext) -> InspectorResult:
+        raise PermissionError("private path must not appear in the report")
 
 
 class InconsistentInspector(Inspector):
@@ -114,7 +129,35 @@ class InspectionPipelineTests(unittest.TestCase):
             self.assertEqual(report.generated_at, FIXED_TIMESTAMP)
             self.assertEqual(report.inspector_results, ())
 
-    def test_propagates_failure_and_stops_later_inspectors(self) -> None:
+    def test_preserves_results_and_continues_after_operational_failure(self) -> None:
+        with TemporaryDirectory() as directory:
+            events: list[str] = []
+            registry = InspectorRegistry()
+            registry.register(RecordingInspector("z-after", events, files_examined=2))
+            registry.register(OperationallyFailingInspector())
+            registry.register(RecordingInspector("a-before", events, files_examined=1))
+
+            report = create_pipeline(registry).run(Path(directory))
+
+            results = {result.inspector: result for result in report.inspector_results}
+            failure = results["middle-failure"]
+            self.assertEqual(events, ["a-before", "z-after"])
+            self.assertIs(results["a-before"].status, InspectorStatus.SUCCESS)
+            self.assertIs(results["z-after"].status, InspectorStatus.SUCCESS)
+            self.assertIs(failure.status, InspectorStatus.FAILED)
+            error = failure.error
+            self.assertIsNotNone(error)
+            assert error is not None
+            self.assertEqual(
+                error,
+                "PermissionError while executing inspector.",
+            )
+            self.assertNotIn("private path", error)
+            self.assertEqual(failure.findings, ())
+            self.assertEqual(failure.files_examined, 0)
+            self.assertEqual(report.total_files_examined, 3)
+
+    def test_propagates_unexpected_failure_and_stops_later_inspectors(self) -> None:
         with TemporaryDirectory() as directory:
             events: list[str] = []
             registry = InspectorRegistry()

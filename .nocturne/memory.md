@@ -8,3 +8,5 @@ Decisões, arquitetura e informações aprendidas pelo agente.
 {"type":"suggestion-decision","title":"Introduzir um contexto de projeto produzido por scanner determinístico","status":"accepted","recordedAt":"2026-07-19T14:33:09.242Z"}
 {"type":"suggestion-decision","title":"Introduzir um contexto de projeto produzido por scanner determinístico","status":"applied","recordedAt":"2026-07-19T14:38:43.188Z"}
 {"type":"suggestion-decision","title":"Separar ausência observada de obrigatoriedade documental","status":"accepted","recordedAt":"2026-07-19T14:40:32.162Z"}
+{"type":"suggestion-decision","title":"Conter falhas por especialista sem perder resultados válidos","status":"accepted","recordedAt":"2026-07-19T14:46:04.575Z"}
+{"type":"suggestion-decision","title":"Conter falhas por especialista sem perder resultados válidos","status":"applied","recordedAt":"2026-07-19T14:49:54.683Z"}

@@ -2,7 +2,7 @@
 
 Nocturne Inspector exports one versioned JSON document. The canonical machine
 contract is [`inspection-report.schema.json`](inspection-report.schema.json).
-Schema version `0.1.0` belongs to the v0.1 foundation and may evolve only
+Schema version `0.2.0` belongs to the v0.1 foundation and may evolve only
 through an explicit documented version change.
 
 ## Top-level fields
@@ -24,6 +24,21 @@ shared scanner inventory after documented directory exclusions are applied.
 explicit extension map. Specialist examinations are reported separately in
 `metrics.total_files_examined` and each result's `files_examined` field; the
 same inventory file may be examined by more than one specialist.
+
+## Inspector execution status
+
+Every `inspector_results` entry contains a `status` and nullable `error`.
+Successful results use `status: "success"` and `error: null`. When a specialist
+encounters an expected operational filesystem error, the pipeline preserves
+other results, records `status: "failed"`, emits no findings for that
+specialist, and stores a sanitized error classification without paths or the
+original exception message.
+
+Context creation errors, unexpected inspector exceptions, and result identity
+or category mismatches remain fatal because they indicate that a complete scan
+cannot start or that an architectural contract was violated. Failed result
+durations and file counts are `0` because an interrupted inspector does not
+return trustworthy metrics.
 
 ## Findings and evidence
 
@@ -58,6 +73,10 @@ Consumers must read `schema_version` before interpreting a report. Additive or
 breaking field changes require a schema version change and an update to both
 the JSON Schema and this document. The Inspector version does not replace the
 schema version: different Inspector releases may emit the same contract.
+
+Schema `0.2.0` adds the required `status` and `error` fields to every inspector
+result. Consumers of schema `0.1.0` must negotiate the new schema version before
+reading a `0.2.0` report.
 
 Report serialization is independent from persistence. Analysis remains
 read-only; a file is written only when the user explicitly supplies an output

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:nocturne:inspection-report:0.1.0",
+  "$id": "urn:nocturne:inspection-report:0.2.0",
   "title": "Nocturne Inspector Report",
   "description": "Versioned output contract produced by Nocturne Inspector.",
   "type": "object",
@@ -21,7 +21,7 @@
       "type": "array",
       "items": { "$ref": "#/$defs/inspectorResult" }
     },
-    "schema_version": { "const": "0.1.0" },
+    "schema_version": { "const": "0.2.0" },
     "inspector_version": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
@@ -173,7 +173,9 @@
         "findings",
         "duration_ms",
         "files_examined",
-        "warnings"
+        "warnings",
+        "status",
+        "error"
       ],
       "properties": {
         "inspector": { "type": "string", "minLength": 1 },
@@ -187,8 +189,33 @@
         "warnings": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "status": { "enum": ["success", "failed"] },
+        "error": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "success" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": { "error": { "type": "null" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "status": { "const": "failed" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "error": { "type": "string", "minLength": 1 },
+              "findings": { "maxItems": 0 }
+            }
+          }
         }
-      }
+      ]
     },
     "summary": {
       "type": "object",

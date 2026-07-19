@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from nocturne_inspector import __version__
 
-REPORT_SCHEMA_VERSION = "0.1.0"
+REPORT_SCHEMA_VERSION = "0.2.0"
 INSPECTOR_VERSION = __version__
 
 _SEMANTIC_VERSION_PATTERN = re.compile(
@@ -102,6 +102,13 @@ class FindingKind(StrEnum):
     IMPROVEMENT_OPPORTUNITY = "improvement_opportunity"
     NEEDS_INVESTIGATION = "needs_investigation"
     POSITIVE_FINDING = "positive_finding"
+
+
+class InspectorStatus(StrEnum):
+    """Execution outcome recorded for one specialist inspector."""
+
+    SUCCESS = "success"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,6 +338,8 @@ class InspectorResult:
     duration_ms: float
     files_examined: int
     warnings: tuple[str, ...] = ()
+    status: InspectorStatus = InspectorStatus.SUCCESS
+    error: str | None = None
 
     def __post_init__(self) -> None:
         if not self.inspector.strip():
@@ -341,6 +350,16 @@ class InspectorResult:
 
         if self.files_examined < 0:
             raise ValueError("files_examined cannot be negative.")
+
+        if self.status is InspectorStatus.SUCCESS and self.error is not None:
+            raise ValueError("Successful inspector results cannot contain an error.")
+
+        if self.status is InspectorStatus.FAILED:
+            if self.error is None or not self.error.strip():
+                raise ValueError("Failed inspector results must contain an error.")
+
+            if self.findings:
+                raise ValueError("Failed inspector results cannot contain findings.")
 
         invalid_categories = tuple(
             finding.category

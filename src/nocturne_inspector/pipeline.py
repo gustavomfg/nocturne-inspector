@@ -6,7 +6,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from nocturne_inspector.inspectors.registry import InspectorRegistry
-from nocturne_inspector.models import InspectionReport, ProjectContext, ProjectMetadata
+from nocturne_inspector.models import (
+    InspectionReport,
+    InspectorResult,
+    InspectorStatus,
+    ProjectContext,
+    ProjectMetadata,
+)
 from nocturne_inspector.scanner import scan_project
 
 
@@ -18,6 +24,11 @@ def _new_run_id() -> str:
 def _current_utc_timestamp() -> str:
     """Create an ISO 8601 timestamp for one inspection execution."""
     return datetime.now(UTC).isoformat()
+
+
+def _sanitized_inspector_error(error: OSError) -> str:
+    """Describe an operational failure without exposing paths or raw messages."""
+    return f"{type(error).__name__} while executing inspector."
 
 
 class InspectionPipeline:
@@ -46,7 +57,18 @@ class InspectionPipeline:
         results = []
 
         for inspector in inspectors:
-            result = inspector.inspect(context)
+            try:
+                result = inspector.inspect(context)
+            except OSError as error:
+                result = InspectorResult(
+                    inspector=inspector.name,
+                    category=inspector.category,
+                    findings=(),
+                    duration_ms=0.0,
+                    files_examined=0,
+                    status=InspectorStatus.FAILED,
+                    error=_sanitized_inspector_error(error),
+                )
 
             if result.inspector != inspector.name:
                 raise ValueError(

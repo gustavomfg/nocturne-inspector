@@ -13,6 +13,7 @@ from nocturne_inspector.models import (
     InspectionReport,
     InspectionSummary,
     InspectorResult,
+    InspectorStatus,
     ProjectMetadata,
     Recommendation,
     Severity,
@@ -235,6 +236,31 @@ class InspectorResultTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             replace(baseline, files_examined=-1)
+
+    def test_validates_status_and_error_consistency(self) -> None:
+        successful = make_result()
+        failed = InspectorResult(
+            inspector="documentation",
+            category=FindingCategory.DOCUMENTATION,
+            findings=(),
+            duration_ms=0.0,
+            files_examined=0,
+            status=InspectorStatus.FAILED,
+            error="PermissionError while executing inspector.",
+        )
+
+        self.assertIs(successful.status, InspectorStatus.SUCCESS)
+        self.assertIsNone(successful.error)
+        self.assertIs(failed.status, InspectorStatus.FAILED)
+
+        with self.assertRaises(ValueError):
+            replace(successful, error="unexpected")
+
+        with self.assertRaises(ValueError):
+            replace(failed, error=None)
+
+        with self.assertRaises(ValueError):
+            replace(failed, findings=(make_finding(),))
 
 
 class ProjectMetadataTests(unittest.TestCase):

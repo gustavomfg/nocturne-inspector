@@ -49,6 +49,19 @@ class ReportSchemaTests(unittest.TestCase):
             set(finding_contract["properties"]),
         )
 
+    def test_schema_documents_inspector_execution_status(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        result_contract = schema["$defs"]["inspectorResult"]
+
+        self.assertEqual(
+            set(result_contract["required"]),
+            set(result_contract["properties"]),
+        )
+        self.assertEqual(
+            result_contract["properties"]["status"]["enum"],
+            ["success", "failed"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
