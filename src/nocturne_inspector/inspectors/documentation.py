@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from time import perf_counter
+from typing import ClassVar
 
 from nocturne_inspector.inspectors.base import Inspector
 from nocturne_inspector.models import (
@@ -25,7 +26,7 @@ class DocumentationInspector(Inspector):
     name = "documentation"
     category = FindingCategory.DOCUMENTATION
 
-    _essential_files = (
+    _root_documentation_files = (
         "AGENTS.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
@@ -35,9 +36,42 @@ class DocumentationInspector(Inspector):
     )
     _docs_directory = "docs"
     _documentation_suffixes = frozenset({".md", ".mdx", ".rst", ".txt"})
+    _default_required_paths = ("README.md",)
+    _path_rule_names: ClassVar[dict[str, str]] = {
+        "AGENTS.md": "agents",
+        "CHANGELOG.md": "changelog",
+        "CONTRIBUTING.md": "contributing",
+        "LICENSE": "license",
+        "README.md": "readme",
+        "SECURITY.md": "security",
+        "docs": "docs-directory",
+    }
 
-    def __init__(self, *, clock: Callable[[], float] = perf_counter) -> None:
-        """Create an inspector with an optionally controlled monotonic clock."""
+    def __init__(
+        self,
+        *,
+        additional_required_paths: Iterable[str] = (),
+        clock: Callable[[], float] = perf_counter,
+    ) -> None:
+        """Create an inspector with an explicit documentation requirement policy."""
+        if isinstance(additional_required_paths, str):
+            raise TypeError("additional_required_paths must contain path names.")
+
+        configured_paths = set(additional_required_paths)
+        normalized_required_paths = tuple(
+            sorted(configured_paths | set(self._default_required_paths))
+        )
+        unsupported_paths = tuple(
+            sorted(
+                path for path in configured_paths if path not in self._path_rule_names
+            )
+        )
+
+        if unsupported_paths:
+            unsupported = ", ".join(repr(path) for path in unsupported_paths)
+            raise ValueError(f"Unsupported required documentation path: {unsupported}")
+
+        self._required_paths = frozenset(normalized_required_paths)
         self._clock = clock
 
     def inspect(self, context: ProjectContext) -> InspectorResult:
@@ -45,10 +79,10 @@ class DocumentationInspector(Inspector):
         root = context.root
 
         started_at = self._clock()
-        findings, essential_files, docs_root = self._inspect_essential_paths(root)
+        findings, root_files, docs_root = self._inspect_documentation_paths(root)
         documentation_files = self._documentation_files(
             context,
-            essential_files=essential_files,
+            root_files=root_files,
             docs_root=docs_root,
         )
         warnings: list[str] = []
@@ -77,59 +111,69 @@ class DocumentationInspector(Inspector):
             warnings=tuple(warnings),
         )
 
-    def _inspect_essential_paths(
+    def _inspect_documentation_paths(
         self,
         root: Path,
     ) -> tuple[list[Finding], tuple[Path, ...], Path | None]:
         findings: list[Finding] = []
         files: list[Path] = []
 
-        for name in self._essential_files:
+        for name in self._root_documentation_files:
             candidate = root / name
+            required = name in self._required_paths
 
             if candidate.is_symlink():
-                findings.append(
-                    self._invalid_essential_path_finding(
-                        name,
-                        expected="regular file",
-                        observed="symbolic link",
+                if required:
+                    findings.append(
+                        self._invalid_required_path_finding(
+                            name,
+                            expected="regular file",
+                            observed="symbolic link",
+                        )
                     )
-                )
             elif not candidate.exists():
-                findings.append(self._missing_essential_path_finding(name))
+                if required:
+                    findings.append(self._missing_required_path_finding(name))
             elif not candidate.is_file():
-                findings.append(
-                    self._invalid_essential_path_finding(
-                        name,
-                        expected="regular file",
-                        observed=self._path_kind(candidate),
+                if required:
+                    findings.append(
+                        self._invalid_required_path_finding(
+                            name,
+                            expected="regular file",
+                            observed=self._path_kind(candidate),
+                        )
                     )
-                )
             else:
                 files.append(candidate)
 
         docs_root = root / self._docs_directory
+        docs_required = self._docs_directory in self._required_paths
 
         if docs_root.is_symlink():
-            findings.append(
-                self._invalid_essential_path_finding(
-                    self._docs_directory,
-                    expected="directory",
-                    observed="symbolic link",
+            if docs_required:
+                findings.append(
+                    self._invalid_required_path_finding(
+                        self._docs_directory,
+                        expected="directory",
+                        observed="symbolic link",
+                    )
                 )
-            )
             valid_docs_root: Path | None = None
         elif not docs_root.exists():
-            findings.append(self._missing_essential_path_finding(self._docs_directory))
+            if docs_required:
+                findings.append(
+                    self._missing_required_path_finding(self._docs_directory)
+                )
             valid_docs_root = None
         elif not docs_root.is_dir():
-            findings.append(
-                self._invalid_essential_path_finding(
-                    self._docs_directory,
-                    expected="directory",
-                    observed=self._path_kind(docs_root),
+            if docs_required:
+                findings.append(
+                    self._invalid_required_path_finding(
+                        self._docs_directory,
+                        expected="directory",
+                        observed=self._path_kind(docs_root),
+                    )
                 )
-            )
             valid_docs_root = None
         else:
             valid_docs_root = docs_root
@@ -140,10 +184,10 @@ class DocumentationInspector(Inspector):
         self,
         context: ProjectContext,
         *,
-        essential_files: tuple[Path, ...],
+        root_files: tuple[Path, ...],
         docs_root: Path | None,
     ) -> tuple[Path, ...]:
-        files = set(essential_files)
+        files = set(root_files)
 
         if docs_root is not None:
             files.update(
@@ -170,19 +214,19 @@ class DocumentationInspector(Inspector):
 
         return "unsupported filesystem entry"
 
-    def _missing_essential_path_finding(self, relative_path: str) -> Finding:
+    def _missing_required_path_finding(self, relative_path: str) -> Finding:
         return Finding(
-            rule_id="documentation.missing-essential-path",
-            title="Essential documentation path not found",
+            rule_id=self._rule_id("missing", relative_path),
+            title="Required documentation path not found",
             description=(
-                f"The expected documentation path {relative_path!r} is absent."
+                f"The required documentation path {relative_path!r} is absent."
             ),
             category=self.category,
             kind=FindingKind.CONFIRMED_ISSUE,
             severity=Severity.LOW,
             confidence=Confidence.from_score(
                 1.0,
-                "The expected root path was checked directly without heuristics.",
+                "The configured path requirement was checked directly.",
             ),
             evidence=(
                 Evidence(
@@ -190,17 +234,18 @@ class DocumentationInspector(Inspector):
                     source=SourceLocation(path=relative_path),
                 ),
             ),
-            impact="An expected project documentation entry is unavailable.",
+            impact=(
+                "A documentation entry required by the active policy is unavailable."
+            ),
             recommendation=Recommendation(
                 summary=f"Add the expected documentation path {relative_path!r}.",
                 rationale=(
-                    "The project documentation contract lists this path as an "
-                    "essential entry."
+                    "The active documentation policy explicitly requires this path."
                 ),
             ),
         )
 
-    def _invalid_essential_path_finding(
+    def _invalid_required_path_finding(
         self,
         relative_path: str,
         *,
@@ -208,8 +253,8 @@ class DocumentationInspector(Inspector):
         observed: str,
     ) -> Finding:
         return Finding(
-            rule_id="documentation.invalid-essential-path",
-            title="Essential documentation path has an invalid type",
+            rule_id=self._rule_id("invalid", relative_path),
+            title="Required documentation path has an invalid type",
             description=(
                 f"The path {relative_path!r} is a {observed}; expected {expected}."
             ),
@@ -218,7 +263,8 @@ class DocumentationInspector(Inspector):
             severity=Severity.LOW,
             confidence=Confidence.from_score(
                 1.0,
-                "The path type was read directly from the filesystem.",
+                "The configured path requirement and filesystem type were checked "
+                "directly.",
             ),
             evidence=(
                 Evidence(
@@ -230,10 +276,15 @@ class DocumentationInspector(Inspector):
             recommendation=Recommendation(
                 summary=f"Provide {relative_path!r} as a {expected}.",
                 rationale=(
-                    "The documented project contract requires the expected path type."
+                    "The active documentation policy explicitly requires the expected "
+                    "path type."
                 ),
             ),
         )
+
+    def _rule_id(self, condition: str, relative_path: str) -> str:
+        rule_name = self._path_rule_names[relative_path]
+        return f"documentation.{condition}-{rule_name}"
 
     def _empty_documentation_finding(self, relative_path: str) -> Finding:
         return Finding(

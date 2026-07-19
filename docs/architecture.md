@@ -47,3 +47,19 @@ same context instance, and receive no knowledge of one another. Project Graph
 remains a future architecture stage and must be introduced behind a documented
 contract without moving specialist analysis or report persistence into the
 CLI.
+
+## Documentation policy
+
+The Documentation Inspector distinguishes filesystem observation from project
+requirements. `README.md` is the only universal requirement in the default
+policy because it is the standalone project entry point documented by the
+Inspector. `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `LICENSE`,
+`SECURITY.md`, and `docs` are inspected when present but are not assumed to be
+mandatory.
+
+Callers may explicitly require any of those known paths when constructing the
+inspector. Only an absent or invalid path selected by that active policy is a
+confirmed issue. Missing and invalid requirements use path-specific rule IDs,
+such as `documentation.missing-readme`, `documentation.missing-security`, and
+`documentation.invalid-docs-directory`, so each policy decision remains
+auditable. Optional paths produce no absence finding.

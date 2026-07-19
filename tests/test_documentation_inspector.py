@@ -6,9 +6,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from nocturne_inspector.inspectors.documentation import DocumentationInspector
+from nocturne_inspector.models import FindingKind
 from nocturne_inspector.scanner import scan_project
 
-ESSENTIAL_FILES = (
+ROOT_DOCUMENTATION_FILES = (
     "AGENTS.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
@@ -29,8 +30,8 @@ class ControlledClock:
 
 
 def create_documented_project(root: Path) -> None:
-    """Create every essential documentation path with deterministic content."""
-    for name in ESSENTIAL_FILES:
+    """Create every known documentation path with deterministic content."""
+    for name in ROOT_DOCUMENTATION_FILES:
         (root / name).write_text(f"{name}\n", encoding="utf-8")
 
     (root / "docs").mkdir()
@@ -47,7 +48,7 @@ def workspace_snapshot(root: Path) -> tuple[tuple[str, bytes], ...]:
 
 
 class DocumentationInspectorTests(unittest.TestCase):
-    def test_reports_no_findings_when_essential_documentation_exists(self) -> None:
+    def test_reports_no_findings_when_known_documentation_exists(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             create_documented_project(root)
@@ -59,35 +60,64 @@ class DocumentationInspectorTests(unittest.TestCase):
             self.assertEqual(result.files_examined, 7)
             self.assertEqual(result.duration_ms, 250.0)
 
-    def test_reports_each_missing_essential_path_with_direct_evidence(self) -> None:
-        expected_paths = (*ESSENTIAL_FILES, "docs")
+    def test_default_policy_requires_only_readme(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
 
-        for missing_path in expected_paths:
-            with self.subTest(path=missing_path), TemporaryDirectory() as directory:
-                root = Path(directory)
-                create_documented_project(root)
-                candidate = root / missing_path
+            result = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
+                scan_project(root)
+            )
 
-                if candidate.is_dir():
-                    for child in candidate.iterdir():
-                        child.unlink()
-                    candidate.rmdir()
-                else:
-                    candidate.unlink()
+            self.assertEqual(len(result.findings), 1)
+            finding = result.findings[0]
+            self.assertEqual(finding.rule_id, "documentation.missing-readme")
+            self.assertIs(finding.kind, FindingKind.CONFIRMED_ISSUE)
+            self.assertEqual(finding.evidence[0].source.path, "README.md")
 
-                result = DocumentationInspector(
-                    clock=ControlledClock(1.0, 1.0)
-                ).inspect(scan_project(root))
-                missing = tuple(
-                    finding
+    def test_absent_optional_paths_do_not_produce_findings(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_text("Project\n", encoding="utf-8")
+
+            result = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
+                scan_project(root)
+            )
+
+            self.assertEqual(result.findings, ())
+            self.assertEqual(result.files_examined, 1)
+
+    def test_explicit_policy_uses_distinct_rule_ids_for_each_path(self) -> None:
+        expected_rule_ids = {
+            "documentation.missing-agents",
+            "documentation.missing-changelog",
+            "documentation.missing-contributing",
+            "documentation.missing-docs-directory",
+            "documentation.missing-license",
+            "documentation.missing-readme",
+            "documentation.missing-security",
+        }
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            inspector = DocumentationInspector(
+                additional_required_paths=(*ROOT_DOCUMENTATION_FILES, "docs"),
+                clock=ControlledClock(1.0, 1.0),
+            )
+
+            result = inspector.inspect(scan_project(root))
+
+            self.assertEqual(
+                {finding.rule_id for finding in result.findings},
+                expected_rule_ids,
+            )
+            self.assertTrue(
+                all(
+                    finding.kind is FindingKind.CONFIRMED_ISSUE
                     for finding in result.findings
-                    if finding.rule_id == "documentation.missing-essential-path"
                 )
+            )
 
-                self.assertEqual(len(missing), 1)
-                self.assertEqual(missing[0].evidence[0].source.path, missing_path)
-
-    def test_reports_invalid_essential_path_types(self) -> None:
+    def test_reports_invalid_types_only_for_explicit_requirements(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             create_documented_project(root)
@@ -97,16 +127,25 @@ class DocumentationInspectorTests(unittest.TestCase):
             (root / "docs").rmdir()
             (root / "docs").write_text("not a directory\n", encoding="utf-8")
 
-            result = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
-                scan_project(root)
-            )
-            invalid_paths = {
-                finding.evidence[0].source.path
-                for finding in result.findings
-                if finding.rule_id == "documentation.invalid-essential-path"
-            }
+            result = DocumentationInspector(
+                additional_required_paths=("docs",),
+                clock=ControlledClock(1.0, 1.0),
+            ).inspect(scan_project(root))
 
-            self.assertEqual(invalid_paths, {"README.md", "docs"})
+            self.assertEqual(
+                {finding.rule_id for finding in result.findings},
+                {
+                    "documentation.invalid-docs-directory",
+                    "documentation.invalid-readme",
+                },
+            )
+
+    def test_rejects_unknown_required_path(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported.md"):
+            DocumentationInspector(additional_required_paths=("unsupported.md",))
+
+        with self.assertRaises(TypeError):
+            DocumentationInspector(additional_required_paths="SECURITY.md")
 
     def test_reports_zero_byte_documentation_with_stable_semantics(self) -> None:
         with TemporaryDirectory() as directory:
@@ -160,18 +199,19 @@ class DocumentationInspectorTests(unittest.TestCase):
             (external_docs / "outside.md").touch()
             (root / "docs").symlink_to(external_docs, target_is_directory=True)
 
-            result = DocumentationInspector(clock=ControlledClock(1.0, 1.0)).inspect(
-                scan_project(root)
-            )
+            result = DocumentationInspector(
+                additional_required_paths=("docs",),
+                clock=ControlledClock(1.0, 1.0),
+            ).inspect(scan_project(root))
 
             invalid = tuple(
                 finding
                 for finding in result.findings
-                if finding.rule_id == "documentation.invalid-essential-path"
+                if finding.rule_id == "documentation.invalid-docs-directory"
             )
             self.assertEqual(len(invalid), 1)
             self.assertEqual(invalid[0].evidence[0].source.path, "docs")
-            self.assertEqual(result.files_examined, len(ESSENTIAL_FILES))
+            self.assertEqual(result.files_examined, len(ROOT_DOCUMENTATION_FILES))
 
     def test_inspection_does_not_modify_workspace(self) -> None:
         with TemporaryDirectory() as directory:
