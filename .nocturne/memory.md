@@ -12,3 +12,4 @@ Decisões, arquitetura e informações aprendidas pelo agente.
 {"type":"suggestion-decision","title":"Conter falhas por especialista sem perder resultados válidos","status":"applied","recordedAt":"2026-07-19T14:49:54.683Z"}
 {"type":"suggestion-decision","title":"Validar relatórios completos contra o JSON Schema","status":"accepted","recordedAt":"2026-07-19T14:50:24.080Z"}
 {"type":"suggestion-decision","title":"Completar metadados legais e histórico da versão inicial","status":"accepted","recordedAt":"2026-07-19T15:00:10.693Z"}
+{"type":"suggestion-decision","title":"Automatizar a matriz de validação em integração contínua","status":"accepted","recordedAt":"2026-07-19T15:10:06.046Z"}

@@ -50,3 +50,6 @@ mypy
 python -m unittest discover -s tests -v
 python -m pip wheel --no-deps --wheel-dir /tmp/nocturne-dist .
 ```
+
+The CI workflow runs the same validation on Python 3.13 and 3.14 for every push
+and pull request.
